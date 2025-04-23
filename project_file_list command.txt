@@ -1,0 +1,32 @@
+﻿
+***********RUN BELOW COMMAND IN POWERSHELL************
+
+# 1. cd to your project root
+cd "C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform"
+
+# 2. List everything except node_modules, venv, logs, dist, editor junk, etc.
+Get-ChildItem -Recurse -Force |
+  Where-Object {
+    $_.FullName      -notlike '*\frontend\node_modules\*' -and
+    $_.FullName      -notlike '*\venv\*'                  -and
+    $_.FullName      -notlike '*\logs\*'                  -and
+    $_.FullName      -notlike '*\dist\*'                  -and
+    $_.FullName      -notlike '*\dist-ssr\*'              -and
+    $_.FullName      -notlike '*\.vscode\*'               -and
+    $_.FullName      -notlike '*\.idea\*'                 -and
+    $_.Name          -notlike '*.log'                    -and
+    $_.Name          -notlike 'npm-debug.log*'            -and
+    $_.Name          -notlike 'yarn-debug.log*'           -and
+    $_.Name          -notlike 'yarn-error.log*'           -and
+    $_.Name          -notlike 'pnpm-debug.log*'           -and
+    $_.Name          -notlike 'lerna-debug.log*'          -and
+    $_.Name          -notlike '*.suo'                    -and
+    $_.Name          -notlike '*.ntvs*'                  -and
+    $_.Name          -notlike '*.njsproj'                -and
+    $_.Name          -notlike '*.sln'                    -and
+    $_.Name          -notlike '*.sw?'                    -and
+    $_.Name          -notlike '*.local'                  -and
+    $_.Name          -ne '.DS_Store'
+  } |
+  Select-Object -ExpandProperty FullName |
+  Out-File project_file_list.txt -Encoding UTF8
