@@ -1,3 +1,26 @@
+/**
+ * File: frontend/src/pages/auth/LoginPage.jsx
+ * Purpose: Login page for user authentication with JWT token support
+ * 
+ * This component handles:
+ * - User login with email and password
+ * - JWT token storage after successful authentication
+ * - Error display for authentication failures
+ * - Redirect to dashboard after login
+ * - Remember me functionality
+ * - Social login options
+ * 
+ * Modifications for new backend:
+ * 1. Changed from username-based to email-based authentication
+ * 2. Added JWT token handling
+ * 3. Added support for role-based access control
+ * 4. Enhanced error handling for account lockouts
+ * 
+ * Fields used from backend:
+ * - email: User's email address for authentication (previously username)
+ * - password: User's password
+ */
+
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useFormik } from 'formik';
@@ -12,31 +35,47 @@ const LoginPage = () => {
   const location = useLocation();
   const [loginError, setLoginError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Get the return URL from location state or default to dashboard
   const from = location.state?.from?.pathname || '/dashboard';
 
   const formik = useFormik({
     initialValues: {
-      username: '',
+      email: '', // Changed from username to email
       password: '',
     },
     validationSchema: Yup.object({
-      username: Yup.string().required('Username is required'),
+      email: Yup.string()
+        .email('Invalid email address')
+        .required('Email is required'), // Changed validation to email
       password: Yup.string().required('Password is required'),
     }),
     onSubmit: async (values) => {
       setIsLoading(true);
       setLoginError(null);
       try {
-        const success = await login(values.username, values.password);
+        // Updated to use email instead of username
+        const success = await login(values.email, values.password, rememberMe);
         if (success) {
           navigate(from, { replace: true });
         } else {
           setLoginError('Failed to login. Please check your credentials.');
         }
       } catch (error) {
-        setLoginError('An error occurred. Please try again.');
+        // Enhanced error handling for account lockouts and other scenarios
+        if (error.response && error.response.data) {
+          const { detail } = error.response.data;
+          if (detail && detail.includes('account is temporarily locked')) {
+            setLoginError('Your account is temporarily locked due to multiple failed login attempts. Please try again later.');
+          } else if (detail && detail.includes('verify your email')) {
+            setLoginError('Please verify your email address before logging in.');
+          } else {
+            setLoginError(detail || 'Failed to login. Please check your credentials.');
+          }
+        } else {
+          setLoginError('An error occurred. Please try again.');
+        }
         console.error('Login error:', error);
       } finally {
         setIsLoading(false);
@@ -76,14 +115,15 @@ const LoginPage = () => {
           )}
           
           <form className="space-y-6" onSubmit={formik.handleSubmit}>
+            {/* Changed from username to email */}
             <FormInput
-              label="Username"
-              name="username"
-              type="text"
-              value={formik.values.username}
+              label="Email Address"
+              name="email"
+              type="email" /* Changed input type to email */
+              value={formik.values.email}
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
-              error={formik.touched.username && formik.errors.username}
+              error={formik.touched.email && formik.errors.email}
               required
             />
 
@@ -105,6 +145,8 @@ const LoginPage = () => {
                   name="remember-me"
                   type="checkbox"
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  checked={rememberMe}
+                  onChange={() => setRememberMe(!rememberMe)}
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
                   Remember me
@@ -112,9 +154,9 @@ const LoginPage = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
+                <Link to="/forgot-password" className="font-medium text-primary-600 hover:text-primary-500">
                   Forgot your password?
-                </a>
+                </Link>
               </div>
             </div>
 

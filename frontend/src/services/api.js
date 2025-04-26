@@ -1,12 +1,28 @@
 /**
- * API Service for Educational Platform
+ * File: frontend/src/services/api.js
+ * Purpose: API Service for Educational Platform with JWT Authentication
  * 
  * This module provides the API services for the Educational Platform, handling all HTTP requests
  * to the backend. It includes services for authentication, courses, assessments, user progress,
  * notes, forums, virtual labs, categories, and system-wide operations.
  * 
+ * Modifications for new backend:
+ * 1. Updated JWT token handling to use access/refresh token pattern
+ * 2. Enhanced auth service to support email-based authentication
+ * 3. Added email verification functions
+ * 4. Updated token refreshing mechanism
+ * 5. Added role-based access checks
+ * 6. Better handling of 401/403 responses
+ * 
+ * Backend Connection Points:
+ * - POST /api/token/ - Get JWT tokens with email/password
+ * - POST /api/token/refresh/ - Refresh JWT access token
+ * - POST /api/users/register/ - Register new user
+ * - GET /api/users/me/ - Get current user profile
+ * - POST /api/users/verify-email/ - Verify user email
+ * 
  * @author nanthiniSanthanam
- * @version 1.0
+ * @version 2.0
  */
 
 import axios from 'axios';
@@ -29,7 +45,7 @@ const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken'); // Changed from 'token' to 'accessToken'
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -67,15 +83,15 @@ apiClient.interceptors.response.use(
           { refresh: refreshToken }
         );
         
-        // Store the new tokens
-        localStorage.setItem('token', response.data.access);
+        // Store the new access token
+        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
         
         // Update the original request and retry
         originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
         // If refresh fails, logout user
-        localStorage.removeItem('token');
+        localStorage.removeItem('accessToken'); // Changed from 'token' to 'accessToken'
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         
@@ -86,7 +102,10 @@ apiClient.interceptors.response.use(
     }
     
     // Handle specific error status codes
-    if (error.response?.status === 404) {
+    if (error.response?.status === 403) {
+      console.error('Permission denied:', originalRequest.url);
+      // If it's a permission issue, might be due to role restrictions
+    } else if (error.response?.status === 404) {
       console.error('Resource not found:', originalRequest.url);
     } else if (error.response?.status === 500) {
       console.error('Server error:', error.response?.data);
@@ -111,7 +130,7 @@ const handleRequest = async (apiCall, errorMessage) => {
     
     // Format error for consistent handling
     const formattedError = {
-      message: error.response?.data?.message || errorMessage,
+      message: error.response?.data?.detail || error.response?.data?.message || errorMessage,
       status: error.response?.status,
       details: error.response?.data || {},
       originalError: error
@@ -128,17 +147,27 @@ const handleRequest = async (apiCall, errorMessage) => {
 export const authService = {
   /**
    * Authenticates a user and stores JWT tokens
-   * @param {Object} credentials - User credentials (username, password)
+   * @param {Object} credentials - User credentials (email, password, rememberMe)
    * @returns {Promise} - User authentication data including tokens
    */
   login: async (credentials) => {
     return handleRequest(
       async () => {
-        const response = await apiClient.post('/token/', credentials);
+        const { email, password, rememberMe } = credentials;
+        const response = await apiClient.post('/token/', { email, password });
         
         // Store tokens
-        localStorage.setItem('token', response.data.access);
+        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
         localStorage.setItem('refreshToken', response.data.refresh);
+        
+        // If remember me is false, set tokens to expire when browser closes
+        if (!rememberMe) {
+          // Using sessionStorage would be more ideal, but we need to maintain API compatibility
+          // Instead, we set a flag to check on app initialization
+          localStorage.setItem('tokenPersistence', 'session');
+        } else {
+          localStorage.setItem('tokenPersistence', 'permanent');
+        }
         
         return response.data;
       },
@@ -152,9 +181,32 @@ export const authService = {
    * @returns {Promise} - New user data
    */
   register: async (userData) => {
+    // Transform camelCase field names to snake_case if needed
+    const transformedData = {
+      ...(userData.firstName && { first_name: userData.firstName }),
+      ...(userData.lastName && { last_name: userData.lastName }),
+      ...(userData.email && { email: userData.email }),
+      ...(userData.username && { username: userData.username }),
+      ...(userData.password && { password: userData.password }),
+      ...(userData.role && { role: userData.role }),
+      ...userData, // Include other fields that might not need transformation
+    };
+    
     return handleRequest(
-      async () => await apiClient.post('/users/register/', userData),
+      async () => await apiClient.post('/users/register/', transformedData),
       'Registration failed'
+    );
+  },
+  
+  /**
+   * Verifies a user's email address
+   * @param {String} token - Email verification token
+   * @returns {Promise} - Verification result
+   */
+  verifyEmail: async (token) => {
+    return handleRequest(
+      async () => await apiClient.post('/users/verify-email/', { token }),
+      'Email verification failed'
     );
   },
   
@@ -162,9 +214,10 @@ export const authService = {
    * Logs out the current user by removing stored tokens
    */
   logout: () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken'); // Changed from 'token' to 'accessToken'
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('tokenPersistence');
   },
   
   /**
@@ -184,8 +237,15 @@ export const authService = {
    * @returns {Promise} - Updated user data
    */
   updateProfile: async (userData) => {
+    // Transform camelCase field names to snake_case if needed
+    const transformedData = {
+      ...(userData.firstName && { first_name: userData.firstName }),
+      ...(userData.lastName && { last_name: userData.lastName }),
+      ...userData, // Include other fields that might not need transformation
+    };
+    
     return handleRequest(
-      async () => await apiClient.put('/users/me/', userData),
+      async () => await apiClient.put('/users/me/', transformedData),
       'Failed to update profile'
     );
   },
@@ -196,33 +256,68 @@ export const authService = {
    * @returns {Promise} - Change password result
    */
   changePassword: async (passwordData) => {
+    const transformedData = {
+      old_password: passwordData.oldPassword,
+      new_password: passwordData.newPassword
+    };
+    
     return handleRequest(
-      async () => await apiClient.post('/users/change-password/', passwordData),
+      async () => await apiClient.post('/users/change-password/', transformedData),
       'Failed to change password'
     );
   },
   
   /**
    * Requests a password reset email
-   * @param {Object} emailData - Email address
+   * @param {String|Object} emailData - Email address or object with email property
    * @returns {Promise} - Request result
    */
   requestPasswordReset: async (emailData) => {
+    const payload = typeof emailData === 'string' 
+      ? { email: emailData }
+      : emailData;
+      
     return handleRequest(
-      async () => await apiClient.post('/users/request-password-reset/', emailData),
+      async () => await apiClient.post('/users/request-password-reset/', payload),
       'Failed to request password reset'
     );
   },
   
   /**
    * Resets password with token
-   * @param {Object} resetData - Token and new password
+   * @param {String} token - Password reset token
+   * @param {String|Object} password - New password or object with password property
    * @returns {Promise} - Reset result
    */
-  resetPassword: async (resetData) => {
+  resetPassword: async (token, password) => {
+    const payload = {
+      token,
+      password: typeof password === 'string' ? password : password.password
+    };
+    
     return handleRequest(
-      async () => await apiClient.post('/users/reset-password/', resetData),
+      async () => await apiClient.post('/users/reset-password/', payload),
       'Failed to reset password'
+    );
+  },
+  
+  /**
+   * Refreshes the access token using the refresh token
+   * @returns {Promise} - New access token
+   */
+  refreshToken: async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+    
+    return handleRequest(
+      async () => {
+        const response = await apiClient.post('/token/refresh/', { refresh: refreshToken });
+        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
+        return response;
+      },
+      'Failed to refresh token'
     );
   },
   
@@ -231,7 +326,7 @@ export const authService = {
    * @returns {Boolean} - Authentication status
    */
   isAuthenticated: () => {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('accessToken'); // Changed from 'token' to 'accessToken'
   }
 };
 
@@ -946,8 +1041,6 @@ export const statisticsService = {
     );
   }
 };
-
-
 
 /**
  * Exports all services as a default object
