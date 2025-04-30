@@ -2,44 +2,71 @@
  * File: frontend/src/App.jsx
  * Purpose: Main application component that defines all routes
  * 
- * Key features:
- * 1. Role-based route protection (student, instructor, admin)
- * 2. Email verification support
- * 3. JWT authentication integration
- * 4. Dynamic content loading based on user role
+ * This component:
+ * 1. Sets up routing for the entire application
+ * 2. Defines access control for routes based on authentication and subscription
+ * 3. Integrates with AuthContext for user management
  * 
- * Implementation notes:
- * - Uses updated ProtectedRoute component with role checking
- * - Integrates with AuthContext for authentication state
- * - Enables different dashboards based on user roles
- * - Maintains backward compatibility with existing routes
+ * Updates:
+ * - Added content access level routes
+ * - Added subscription-related routes
+ * - Added certificate routes for paid users
+ * - Fixed missing imports for subscription and certificate pages
+ * 
+ * Variables to modify:
+ * None - routes are configured based on authentication state and roles
+ * 
+ * Route Access Levels:
+ * - Public routes: Accessible to all users (homepage, about, login, register)
+ * - Protected routes: Require basic authentication (course content, profile)
+ * - Role-specific routes: Require specific user roles (admin dashboard, instructor dashboard)
+ * - Subscription routes: Require premium subscription (certificates)
+ * 
+ * Created by: Professor Santhanam
+ * Last updated: 2025-04-27, 16.08 pm
  */
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 
+// Layouts
+import MainLayout from './components/layouts/MainLayout';
+
 // Public Pages
 import HomePage from './pages/HomePage';
-import LoginPage from './pages/auth/LoginPage';
-import RegisterPage from './pages/auth/RegisterPage';
-import CourseLandingPage from './pages/courses/CourseLandingPage';
+import AboutPage from './pages/AboutPage';
 import NotFoundPage from './pages/NotFoundPage';
 
-// Protected Pages
-import CourseContentPage from './pages/courses/CourseContentPage';
-import AssessmentPage from './pages/courses/AssessmentPage';
-import ProfilePage from './pages/user/ProfilePage';
-
-// Dashboard Pages - Create these if they don't exist
-import DashboardPage from './pages/dashboard/DashboardPage'; // Generic dashboard
-import StudentDashboard from './pages/dashboard/StudentDashboard'; // Student-specific
-import InstructorDashboard from './pages/dashboard/InstructorDashboard'; // Instructor-specific
-
-// Authentication Pages - Create these if needed
+// Auth Pages
+import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+
+// Course Pages
+import CourseLandingPage from './pages/courses/CourseLandingPage';
+import CourseContentPage from './pages/courses/CourseContentPage';
+import AssessmentPage from './pages/courses/AssessmentPage';
+import CoursesListPage from './pages/courses/CoursesListPage';
+
+// Dashboard Pages
+import DashboardPage from './pages/dashboard/DashboardPage';
+import StudentDashboard from './pages/dashboard/StudentDashboard';
+import InstructorDashboard from './pages/dashboard/InstructorDashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
+
+// User Pages
+import ProfilePage from './pages/user/ProfilePage';
+
+// Subscription Pages
+import PricingPage from './pages/subscription/PricingPage';
+import CheckoutPage from './pages/subscription/CheckoutPage';
+import SubscriptionSuccessPage from './pages/subscription/SubscriptionSuccessPage';
+
+// Certificate Pages
+import CertificatePage from './pages/certificates/CertificatePage';
 
 // Protected Route Component
 import ProtectedRoute from './components/routes/ProtectedRoute';
@@ -53,15 +80,59 @@ function App() {
       <AuthProvider>
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
+          <Route path="/about" element={<MainLayout><AboutPage /></MainLayout>} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/verify-email/:token?" element={<VerifyEmailPage />} />
-          <Route path="/courses/:courseSlug" element={<CourseLandingPage />} />
           
-          {/* Dashboard Routes - Role-specific */}
+          {/* Course Landing Pages - Public but with tiered content */}
+          <Route path="/courses/:courseSlug" element={<MainLayout><CourseLandingPage /></MainLayout>} />
+          
+          {/* Subscription Plans - Public but with auth redirects */}
+          <Route path="/pricing" element={<MainLayout><PricingPage /></MainLayout>} />
+          
+          {/* Routes requiring basic authentication (registered users) */}
+          <Route 
+            path="/checkout/:planId" 
+            element={
+              <ProtectedRoute>
+                <MainLayout><CheckoutPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/subscription/success" 
+            element={
+              <ProtectedRoute>
+                <MainLayout><SubscriptionSuccessPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Course Content - Requires authentication with content tiering */}
+          <Route 
+            path="/courses/:courseSlug/content/:moduleId/:lessonId" 
+            element={
+              <ProtectedRoute requireEmailVerified={true}>
+                <MainLayout><CourseContentPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/courses/:courseSlug/assessment/:lessonId" 
+            element={
+              <ProtectedRoute requireEmailVerified={true}>
+                <MainLayout><AssessmentPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Dashboard Routes */}
           <Route 
             path="/dashboard" 
             element={
@@ -71,11 +142,24 @@ function App() {
             } 
           />
           
+          {/* Course List Page */}
+          <Route 
+            path="/courses" 
+            element={
+              <ProtectedRoute>
+                <CoursesListPage />
+              </ProtectedRoute>
+            } 
+          />
+
+
+
+          {/* Role-Specific Dashboards */}
           <Route 
             path="/student/dashboard" 
             element={
               <ProtectedRoute requiredRoles={['student']}>
-                <StudentDashboard />
+                <MainLayout><StudentDashboard /></MainLayout>
               </ProtectedRoute>
             } 
           />
@@ -84,26 +168,16 @@ function App() {
             path="/instructor/dashboard" 
             element={
               <ProtectedRoute requiredRoles={['instructor']}>
-                <InstructorDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Course Content Routes - Require Authentication */}
-          <Route 
-            path="/courses/:courseSlug/content/:moduleId/:lessonId" 
-            element={
-              <ProtectedRoute requireEmailVerified={true}>
-                <CourseContentPage />
+                <MainLayout><InstructorDashboard /></MainLayout>
               </ProtectedRoute>
             } 
           />
           
           <Route 
-            path="/courses/:courseSlug/assessment/:lessonId" 
+            path="/admin/dashboard" 
             element={
-              <ProtectedRoute requireEmailVerified={true}>
-                <AssessmentPage />
+              <ProtectedRoute requiredRoles={['admin']}>
+                <MainLayout><AdminDashboard /></MainLayout>
               </ProtectedRoute>
             } 
           />
@@ -113,13 +187,25 @@ function App() {
             path="/profile" 
             element={
               <ProtectedRoute>
-                <ProfilePage />
+                <MainLayout><ProfilePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Certificate Routes - Only for paid subscribers */}
+          <Route 
+            path="/certificates/:certificateId" 
+            element={
+              <ProtectedRoute requiredSubscription="premium">
+                <MainLayout>
+                  <CertificatePage />
+                </MainLayout>
               </ProtectedRoute>
             } 
           />
           
           {/* 404 Route */}
-          <Route path="*" element={<NotFoundPage />} />
+          <Route path="*" element={<MainLayout><NotFoundPage /></MainLayout>} />
         </Routes>
       </AuthProvider>
     </Router>

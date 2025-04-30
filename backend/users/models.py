@@ -400,3 +400,103 @@ class UserSession(models.Model):
         """
         self.is_active = False
         self.save(update_fields=['is_active'])
+
+
+# Add to existing models.py file
+
+class Subscription(models.Model):
+    """
+    Subscription model for tracking user subscription status
+
+    This model tracks:
+    1. Subscription tier (free, basic, premium)
+    2. Payment status and history
+    3. Expiration dates
+
+    Variables to modify:
+    - SUBSCRIPTION_TIERS: Update if subscription level names change
+    - DEFAULT_SUBSCRIPTION_DAYS: Change default subscription length
+    """
+
+    SUBSCRIPTION_TIERS = [
+        ('free', 'Free'),
+        ('basic', 'Basic'),
+        ('premium', 'Premium'),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+        ('pending', 'Pending'),
+    ]
+
+    user = models.OneToOneField(
+        'users.CustomUser',
+        on_delete=models.CASCADE,
+        related_name='subscription'
+    )
+    tier = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_TIERS,
+        default='free'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active'
+    )
+    start_date = models.DateTimeField(auto_now_add=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+    is_auto_renew = models.BooleanField(default=False)
+    last_payment_date = models.DateTimeField(null=True, blank=True)
+
+    # Payment details - in production, consider a separate model for payment history
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+    payment_id = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Subscription"
+        verbose_name_plural = "Subscriptions"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.tier} ({self.status})"
+
+    def is_active(self):
+        """Check if subscription is active"""
+        if self.tier == 'free':
+            return True
+
+        if self.status != 'active':
+            return False
+
+        if self.end_date and self.end_date < timezone.now():
+            self.status = 'expired'
+            self.save()
+            return False
+
+        return True
+
+    @property
+    def days_remaining(self):
+        """Calculate days remaining in subscription"""
+        if self.tier == 'free' or not self.end_date:
+            return 0
+
+        delta = self.end_date - timezone.now()
+        return max(0, delta.days)
+
+    @classmethod
+    def create_for_user(cls, user, tier='free', days=30):
+        """Create a new subscription for user"""
+        end_date = None
+        if tier != 'free':
+            end_date = timezone.now() + timezone.timedelta(days=days)
+
+        subscription = cls.objects.create(
+            user=user,
+            tier=tier,
+            status='active',
+            end_date=end_date
+        )
+        return subscription

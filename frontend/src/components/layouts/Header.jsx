@@ -1,258 +1,287 @@
+/**
+ * File: C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\components\layouts\Header.jsx
+ * Purpose: Enhanced header component for the educational platform with sticky behavior
+ * 
+ * This component:
+ * 1. Provides navigation links to main sections of the platform
+ * 2. Shows the website logo and branding
+ * 3. Displays user authentication status and controls
+ * 4. Includes search functionality for courses
+ * 5. Features a sticky header that shrinks when scrolling
+ * 
+ * Enhanced features:
+ * - Header stays fixed at the top of the page while scrolling
+ * - Header height reduces when scrolling down for a compact appearance
+ * - Logo size adjusts during scrolling
+ * - Smooth transitions when changing header size
+ * - Full width display with proper container spacing
+ * 
+ * Variables that can be modified:
+ * - NAV_LINKS: Update navigation links as needed
+ * - SCROLL_THRESHOLD: Pixel value where the header starts to shrink (default: 50)
+ * - ANIMATION_DURATION: How fast the header shrinks/expands (default: 0.3s)
+ * - COMPACT_HEADER_HEIGHT: Height of the header when scrolled (default: 60px)
+ * - EXPANDED_HEADER_HEIGHT: Height of the header when at top (default: 80px)
+ * 
+ * Created by: Professor Santhanam
+ * Last updated: 2025-04-27 11:45:00
+ */
+
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
+// Configuration variables - modify these values to adjust header behavior
+const SCROLL_THRESHOLD = 50; // How many pixels to scroll before shrinking header
+const ANIMATION_DURATION = '0.3s'; // How quickly the header shrinks/expands
+const COMPACT_HEADER_HEIGHT = '60px'; // Height of header when scrolled
+const EXPANDED_HEADER_HEIGHT = '80px'; // Height of header when at top
+
+// Navigation links - customize as needed
+const NAV_LINKS = [
+  { name: 'Home', path: '/' },
+  { name: 'Explore', path: '/courses' },
+  { name: 'Learn', path: '/learn' },
+  { name: 'Practice', path: '/practice' },
+  { name: 'Community', path: '/community' },
+  { name: 'Resources', path: '/resources' }
+];
+
 const Header = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   
-  // Dynamic date and time
-  const [currentDateTime, setCurrentDateTime] = useState('');
-  const username = 'nanthiniSanthanam'; // Default username
+  // New state for tracking scroll position
+  const [scrolled, setScrolled] = useState(false);
   
-  // Generate initials for avatar
-  const getInitials = (name) => {
-    if (!name) return 'US';
-    const nameParts = name.split(' ');
-    if (nameParts.length >= 2) {
-      return `${nameParts[0].charAt(0)}${nameParts[1].charAt(0)}`;
+  // Handle search submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/courses?search=${encodeURIComponent(searchQuery)}`);
     }
-    return name.substring(0, 2).toUpperCase();
   };
-
+  
+  // Effect to handle scroll events
   useEffect(() => {
-    // Function to format date in YYYY-MM-DD HH:MM:SS format
-    const formatDate = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      
-      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    };
-
-    // Update date and time initially
-    setCurrentDateTime(formatDate(new Date()));
-    
-    // Update date and time every minute
-    const timer = setInterval(() => {
-      setCurrentDateTime(formatDate(new Date()));
-    }, 60000);
-
     const handleScroll = () => {
-      setIsScrolled(window.pageYOffset > 50);
+      // Check if we've scrolled past the threshold
+      const isScrolled = window.scrollY > SCROLL_THRESHOLD;
+      
+      // Only update state if it changed, to avoid unnecessary re-renders
+      if (isScrolled !== scrolled) {
+        setScrolled(isScrolled);
+      }
     };
-
+    
+    // Add scroll event listener
     window.addEventListener('scroll', handleScroll);
     
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Failed to log out', error);
-    }
-  };
-
-  const isActive = (path) => {
-    if (path === '/' && location.pathname !== '/') return false;
-    return location.pathname.startsWith(path);
-  };
-
-  // Create safe initials for the avatar
-  const userInitials = getInitials(username);
-
+    // Check initial scroll position
+    handleScroll();
+    
+    // Clean up event listener on component unmount
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [scrolled]); // Only re-run if scrolled state changes
+  
   return (
-    <>
-      {/* Current UTC Time and User Info Banner - Responsive full width */}
-      <div className="hidden md:block bg-gray-900 text-gray-300 text-xs py-1 w-full">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <div>Current Date and Time (UTC): <span className="font-medium">{currentDateTime}</span></div>
-          <div>User: <span className="font-medium">{username}</span></div>
-        </div>
-      </div>
-
-      {/* Header with Navigation - Full width with container inside */}
-      <header 
-        className={`sticky top-0 z-50 w-full transition-all duration-300 ease-in-out ${
-          isScrolled ? 'py-2 bg-white/90 backdrop-blur-md shadow-soft' : 'py-4 bg-white'
-        }`}
-      >
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          {/* Logo with enhanced styling */}
-          <Link to="/" className="flex items-center group">
-            <div className="h-10 w-10 bg-primary-500 rounded-xl flex items-center justify-center text-white font-bold text-lg mr-3 shadow-md group-hover:bg-primary-600 transition-all">ST</div>
-            <span className="text-xl md:text-2xl font-bold text-gray-900 font-display tracking-tight group-hover:text-primary-500 transition-colors">SoftTech Solutions</span>
+    <header 
+      className={`bg-white shadow-md w-full fixed top-0 left-0 z-50 transition-all`}
+      style={{
+        height: scrolled ? COMPACT_HEADER_HEIGHT : EXPANDED_HEADER_HEIGHT,
+        transitionDuration: ANIMATION_DURATION
+      }}
+    >
+      <div className="container mx-auto px-4 h-full">
+        <div className="flex items-center justify-between h-full">
+          {/* Logo */}
+          <Link to="/" className="flex items-center">
+            <div 
+              className={`bg-primary-600 rounded-full flex items-center justify-center text-white font-bold mr-2 transition-all`}
+              style={{
+                height: scrolled ? '36px' : '40px',
+                width: scrolled ? '36px' : '40px',
+                transitionDuration: ANIMATION_DURATION
+              }}
+            >
+              ST
+            </div>
+            <div className={`font-semibold transition-all`} style={{
+              fontSize: scrolled ? '1rem' : '1.25rem',
+              transitionDuration: ANIMATION_DURATION
+            }}>
+              <span>SoftTech</span>
+              <span className="block -mt-1">Solutions</span>
+            </div>
           </Link>
           
-          {/* Mobile Menu Button - Refined styling */}
-          <button 
-            onClick={() => setIsOpen(!isOpen)} 
-            className="md:hidden text-gray-700 hover:text-primary-500 focus:outline-none transition-colors"
-          >
-            <i className={`fa-solid ${isOpen ? 'fa-xmark text-lg' : 'fa-bars text-lg'}`}></i>
-          </button>
-          
-          {/* Desktop Navigation - Enhanced with subtle hover effects */}
-          <nav className="hidden md:flex items-center space-x-1">
-            <Link to="/" className={`px-3 py-2 rounded-lg font-medium ${isActive('/') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Home
-            </Link>
-            <Link to="/courses" className={`px-3 py-2 rounded-lg font-medium ${isActive('/courses') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Explore
-            </Link>
-            <Link to="/learning-paths" className={`px-3 py-2 rounded-lg font-medium ${isActive('/learning') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Learn
-            </Link>
-            <Link to="/virtual-lab" className={`px-3 py-2 rounded-lg font-medium ${isActive('/virtual-lab') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Practice
-            </Link>
-            <Link to="/community" className={`px-3 py-2 rounded-lg font-medium ${isActive('/community') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Community
-            </Link>
-            <Link to="/resources" className={`px-3 py-2 rounded-lg font-medium ${isActive('/resources') ? 'text-primary-500' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500 transition-colors'}`}>
-              Resources
-            </Link>
-            
-            {/* Search Box - Enhanced with premium styling */}
-            <div className="relative ml-4">
-              <input type="text" placeholder="Search courses..." className="w-64 pl-10 pr-4 py-2.5 rounded-xl bg-gray-100 border-none focus:bg-white focus:ring-2 focus:ring-primary-300 transition-all text-sm" />
-              <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-            </div>
-            
-            {/* User Menu (logged in state) - Enhanced with premium styling */}
-            <div className="relative ml-3">
-              <button 
-                onClick={() => setUserMenuOpen(!userMenuOpen)} 
-                className="flex items-center space-x-2 group"
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-6">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`text-gray-600 hover:text-primary-600 transition-all ${
+                  window.location.pathname === link.path ? 'text-primary-600 font-medium' : ''
+                }`}
+                style={{
+                  fontSize: scrolled ? '0.9rem' : '1rem',
+                  transitionDuration: ANIMATION_DURATION
+                }}
               >
-                <div className="h-9 w-9 rounded-full bg-primary-500 flex items-center justify-center text-white shadow-sm overflow-hidden border-2 border-white group-hover:border-primary-100 transition-all">
-                  {/* Use inline style for colored background instead of UI Avatars API */}
-                  <div className="h-full w-full flex items-center justify-center bg-primary-500 text-white">
-                    {userInitials}
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-primary-500 hidden lg:inline-block transition-colors">
-                  {username}
-                </span>
-                <i className="fa-solid fa-chevron-down text-xs text-gray-400 group-hover:text-primary-500 transition-colors"></i>
-              </button>
-              
-              {/* Dropdown Menu - More premium styling */}
-              {userMenuOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-soft py-2 border border-gray-100 focus:outline-none z-50">
-                  <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-sm font-medium text-gray-900">{username}</p>
-                    <p className="text-xs text-gray-500">user@example.com</p>
-                  </div>
-                  <Link to="/dashboard" className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-500" onClick={() => setUserMenuOpen(false)}>
-                    My Dashboard
-                  </Link>
-                  <Link to="/profile" className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-500" onClick={() => setUserMenuOpen(false)}>
-                    Profile
-                  </Link>
-                  <Link to="/settings" className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-500" onClick={() => setUserMenuOpen(false)}>
-                    Settings
-                  </Link>
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button 
-                    onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-500"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
+                {link.name}
+              </Link>
+            ))}
           </nav>
+          
+          {/* Search and User Menu */}
+          <div className="flex items-center space-x-4">
+            {/* Search Box */}
+            <form onSubmit={handleSearch} className="relative">
+              <input
+                type="text"
+                placeholder="Search courses..."
+                className={`bg-gray-100 rounded-full py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all`}
+                style={{
+                  padding: scrolled ? '0.5rem 1rem 0.5rem 2.5rem' : '0.625rem 1rem 0.625rem 2.5rem',
+                  width: scrolled ? '200px' : '256px', // Slightly smaller on scroll
+                  transitionDuration: ANIMATION_DURATION
+                }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button 
+                type="submit" 
+                className="absolute left-3 text-gray-400"
+                style={{
+                  top: scrolled ? '0.5rem' : '0.625rem',
+                  transitionDuration: ANIMATION_DURATION
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </form>
+            
+            {/* User Menu */}
+            {isAuthenticated() ? (
+              <div className="relative">
+                <button 
+                  className="flex items-center focus:outline-none"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                >
+                  <div 
+                    className="bg-primary-200 rounded-full flex items-center justify-center text-primary-700 font-medium mr-2 transition-all"
+                    style={{
+                      height: scrolled ? '28px' : '32px',
+                      width: scrolled ? '28px' : '32px',
+                      transitionDuration: ANIMATION_DURATION
+                    }}
+                  >
+                    NA
+                  </div>
+                  <span 
+                    className="text-gray-700 transition-all"
+                    style={{
+                      fontSize: scrolled ? '0.8rem' : '0.875rem',
+                      transitionDuration: ANIMATION_DURATION
+                    }}
+                  >
+                    nanthiniSanthanam
+                  </span>
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className={`h-4 w-4 ml-1 text-gray-500 transition-transform ${showUserMenu ? 'transform rotate-180' : ''}`} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                    <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dashboard</Link>
+                    <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Profile</Link>
+                    <Link to="/user/courses" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Courses</Link>
+                    <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</Link>
+                    <button 
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                        navigate('/');
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Link 
+                  to="/login" 
+                  className={`text-gray-700 hover:text-primary-600 transition-all`}
+                  style={{
+                    fontSize: scrolled ? '0.8rem' : '0.875rem',
+                    transitionDuration: ANIMATION_DURATION
+                  }}
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/register" 
+                  className="bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-all"
+                  style={{
+                    padding: scrolled ? '0.375rem 0.875rem' : '0.5rem 1rem',
+                    fontSize: scrolled ? '0.8rem' : '0.875rem',
+                    transitionDuration: ANIMATION_DURATION
+                  }}
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
+            
+            {/* Mobile Menu Button */}
+            <button 
+              className="md:hidden flex items-center"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
         
-        {/* Mobile Menu - Full width */}
-        {isOpen && (
-          <div className="md:hidden bg-white border-t mt-2 shadow-md w-full">
-            <div className="px-4 pt-4 pb-5 space-y-3">
-              <Link to="/" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Home
-              </Link>
-              <Link to="/courses" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/courses') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Explore
-              </Link>
-              <Link to="/learning-paths" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/learning') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Learn
-              </Link>
-              <Link to="/virtual-lab" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/virtual-lab') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Practice
-              </Link>
-              <Link to="/community" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/community') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Community
-              </Link>
-              <Link to="/resources" className={`block px-4 py-3 rounded-lg font-medium ${isActive('/resources') ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-500'}`} onClick={() => setIsOpen(false)}>
-                Resources
-              </Link>
-            </div>
-            
-            {/* Mobile Search - Enhanced styling */}
-            <div className="px-4 py-4 border-t border-gray-100">
-              <div className="relative">
-                <input type="text" placeholder="Search courses..." className="w-full pl-10 pr-4 py-3 rounded-lg bg-gray-100 border-none focus:ring-2 focus:ring-primary-300 transition-all" />
-                <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-              </div>
-            </div>
-            
-            {/* Mobile User Menu - Enhanced styling */}
-            <div className="px-4 py-4 border-t border-gray-100">
-              <div className="flex items-center">
-                <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white shadow-sm overflow-hidden mr-3">
-                  {/* Replace avatar URL with inline style */}
-                  <div className="h-full w-full flex items-center justify-center bg-primary-500 text-white">
-                    {userInitials}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-900">{username}</div>
-                  <div className="text-xs text-gray-500">user@example.com</div>
-                </div>
-              </div>
-              <div className="mt-4 space-y-2">
-                <Link to="/dashboard" className="block px-4 py-2.5 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-500" onClick={() => setIsOpen(false)}>
-                  My Dashboard
-                </Link>
-                <Link to="/profile" className="block px-4 py-2.5 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-500" onClick={() => setIsOpen(false)}>
-                  Profile
-                </Link>
-                <Link to="/settings" className="block px-4 py-2.5 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-500" onClick={() => setIsOpen(false)}>
-                  Settings
-                </Link>
-                <button 
-                  onClick={handleLogout}
-                  className="block w-full text-left px-4 py-2.5 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-500"
+        {/* Mobile Navigation */}
+        {showMobileMenu && (
+          <nav className="md:hidden pt-4 pb-2 border-t mt-4">
+            <div className="flex flex-col space-y-3">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`text-gray-600 hover:text-primary-600 ${
+                    window.location.pathname === link.path ? 'text-primary-600 font-medium' : ''
+                  }`}
+                  onClick={() => setShowMobileMenu(false)}
                 >
-                  Sign out
-                </button>
-              </div>
+                  {link.name}
+                </Link>
+              ))}
             </div>
-            
-            {/* Mobile Time & User Info - Updated with current date and time */}
-            <div className="px-4 py-3 bg-gray-50 text-xs text-gray-500 border-t border-gray-100">
-              <p>Current Date and Time (UTC): {currentDateTime}</p>
-              <p>User: {username}</p>
-            </div>
-          </div>
+          </nav>
         )}
-      </header>
-    </>
+      </div>
+    </header>
   );
 };
 

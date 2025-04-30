@@ -29,6 +29,7 @@ import ProgressBar from './ProgressBar';
 import Skeleton, { TextSkeleton, CardSkeleton } from './Skeleton';
 import Tooltip from './Tooltip';
 import AnimatedElement from './AnimatedElement';
+import Certificate from './Certificate';
 
 // Form Elements
 import FormInput from './FormInput';
@@ -53,6 +54,7 @@ export {
   CardSkeleton,
   Tooltip,
   AnimatedElement,
+  Certificate,
   
   // Form Elements
   FormInput,

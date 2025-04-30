@@ -1,5 +1,39 @@
+/**
+ * File: frontend/src/pages/courses/CourseContentPage.jsx
+ * Purpose: Display course content with tiered access control for educational platform
+ * 
+ * This component implements a three-tier access model for an educational platform:
+ * 1. Unregistered users: Can view basic preview content without logging in
+ * 2. Registered users: Can access intermediate content, take notes, and track progress
+ * 3. Paid users: Can access advanced content, certificates, and premium resources
+ * 
+ * Key features:
+ * - Content access control based on user subscription tier
+ * - Course navigation with modules and lessons
+ * - Progress tracking for authenticated users
+ * - Note-taking functionality for authenticated users
+ * - Assessment and lab access with authentication checks
+ * - Certificate generation for course completion (premium users)
+ * 
+ * Variables that may need modification:
+ * - ACCESS_LEVEL_MESSAGES: Customize messages shown for locked content
+ * - DEFAULT_PREVIEW_CONTENT: Modify the default preview content for unregistered users
+ * 
+ * Functions:
+ * - completeLesson(): Marks lessons as completed for tracking progress
+ * - handleSaveNote(): Saves user notes for a specific lesson
+ * - navigateToLesson(): Handles navigation between lessons
+ * - findNavigation(): Determines previous and next lessons for navigation controls
+ * 
+ * Important Note: This file is configured to allow basic content viewing for unregistered 
+ * users while protecting premium features that require authentication.
+ * 
+ * Created by: Professor Santhanam
+ * Last updated: 2025-04-27
+ */
+
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Button, 
   Card, 
@@ -14,11 +48,44 @@ import {
 import { Header } from '../../components/layouts';
 import { courseService, noteService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import ContentAccessController from '../../components/common/ContentAccessController';
+
+// Custom messages for different access levels - modify these to change user prompts
+const ACCESS_LEVEL_MESSAGES = {
+  basic: "Register for free to access this complete lesson",
+  intermediate: "Upgrade to a premium subscription to access advanced content and exercises",
+  advanced: "This advanced content is available to premium subscribers only"
+};
+
+/**
+ * Default preview content template for unregistered users
+ * @param {string} title - The lesson title to display in the preview
+ * @returns {string} HTML content string for the preview section
+ */
+const DEFAULT_PREVIEW_CONTENT = (title) => `
+  <h2>${title} - Preview</h2>
+  <p>This is a preview of the lesson content. Register or upgrade for full access.</p>
+  <div class="bg-gray-100 p-4 rounded my-4">
+    <h3>What you'll learn</h3>
+    <ul>
+      <li>Key concept overview</li>
+      <li>Basic terminology</li>
+      <li>Foundation principles</li>
+    </ul>
+  </div>
+  <p>To access the full content with exercises and assessments, please register for a free account.</p>
+`;
 
 const CourseContentPage = () => {
+  // Get route parameters from URL
   const { courseSlug, moduleId = '1', lessonId = '1' } = useParams();
   const navigate = useNavigate();
-  const { currentUser, isAuthenticated } = useAuth();
+  const location = useLocation();
+  
+  // Get authentication context values
+  const { currentUser, isAuthenticated, getAccessLevel } = useAuth();
+  
+  // Component state management
   const [activeTab, setActiveTab] = useState('content');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -34,14 +101,7 @@ const CourseContentPage = () => {
     percentage: 0
   });
 
-  // Check authentication
-  useEffect(() => {
-    if (!loading && !isAuthenticated()) {
-      navigate('/login', { state: { from: `/courses/${courseSlug}/content/${moduleId}/${lessonId}` } });
-    }
-  }, [loading, isAuthenticated, navigate, courseSlug, moduleId, lessonId]);
-
-  // Load course data
+  // Load course data - allowing preview for unregistered users
   useEffect(() => {
     const fetchCourseData = async () => {
       try {
@@ -59,8 +119,8 @@ const CourseContentPage = () => {
         const lessonResponse = await courseService.getLessonDetails(lessonId);
         setCurrentLesson(lessonResponse.data);
         
-        // Get user progress
-        if (courseResponse.data.user_progress) {
+        // Get user progress for authenticated users only
+        if (isAuthenticated() && courseResponse.data.user_progress) {
           setProgress(courseResponse.data.user_progress);
         }
         
@@ -72,15 +132,14 @@ const CourseContentPage = () => {
       }
     };
 
-    if (isAuthenticated()) {
-      fetchCourseData();
-    }
+    // Allow anyone to fetch course data, authenticated or not
+    fetchCourseData();
   }, [courseSlug, moduleId, lessonId, isAuthenticated]);
 
-  // Load user notes when tab changes
+  // Load user notes when tab changes (only for authenticated users)
   useEffect(() => {
     const fetchNotes = async () => {
-      if (activeTab === 'notes' && currentLesson) {
+      if (activeTab === 'notes' && currentLesson && isAuthenticated()) {
         try {
           const response = await noteService.getNotesForLesson(currentLesson.id);
           setUserNotes(response.data);
@@ -90,14 +149,15 @@ const CourseContentPage = () => {
       }
     };
 
-    if (isAuthenticated()) {
-      fetchNotes();
-    }
+    fetchNotes();
   }, [activeTab, currentLesson, isAuthenticated]);
 
-  // Handle saving a note
+  /**
+   * Handles saving a note for the current lesson
+   * Only works for authenticated users
+   */
   const handleSaveNote = async () => {
-    if (!noteContent.trim() || !currentLesson) return;
+    if (!noteContent.trim() || !currentLesson || !isAuthenticated()) return;
     
     try {
       await noteService.createNote({
@@ -114,9 +174,12 @@ const CourseContentPage = () => {
     }
   };
 
-  // Handle completing a lesson
+  /**
+   * Marks the current lesson as completed to track progress
+   * Only works for authenticated users
+   */
   const completeLesson = async () => {
-    if (!currentLesson) return;
+    if (!currentLesson || !isAuthenticated()) return;
     
     try {
       const response = await courseService.completeLesson(currentLesson.id);
@@ -134,12 +197,19 @@ const CourseContentPage = () => {
     }
   };
 
-  // Navigation between lessons
+  /**
+   * Navigates to a different lesson within the course
+   * @param {string} moduleId - The ID of the module to navigate to
+   * @param {string} lessonId - The ID of the lesson to navigate to
+   */
   const navigateToLesson = (moduleId, lessonId) => {
     navigate(`/courses/${courseSlug}/content/${moduleId}/${lessonId}`);
   };
 
-  // Find next and previous lessons
+  /**
+   * Determines the previous and next lessons for navigation
+   * @returns {Object} Object containing prevLink and nextLink navigation objects
+   */
   const findNavigation = () => {
     if (!courseData || !currentModule) return { prevLink: null, nextLink: null };
     
@@ -233,7 +303,10 @@ const CourseContentPage = () => {
     );
   }
 
-  // Rest of component remains the same as in the original
+  // Determine user's access level - basic for unregistered, intermediate for registered, advanced for premium
+  const userAccessLevel = getAccessLevel ? getAccessLevel() : (isAuthenticated() ? 'intermediate' : 'basic');
+
+  // Main content render
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Course Header with Progress */}
@@ -259,17 +332,20 @@ const CourseContentPage = () => {
             </div>
           </div>
 
-          <div className="w-full md:w-64">
-            <div className="flex justify-between mb-1 text-sm">
-              <span className="font-medium">Your progress</span>
-              <span>{progress.percentage}% complete</span>
+          {/* Only show progress for authenticated users */}
+          {isAuthenticated() && (
+            <div className="w-full md:w-64">
+              <div className="flex justify-between mb-1 text-sm">
+                <span className="font-medium">Your progress</span>
+                <span>{progress.percentage}% complete</span>
+              </div>
+              <ProgressBar 
+                value={progress.percentage} 
+                color="primary"
+                height="small" 
+              />
             </div>
-            <ProgressBar 
-              value={progress.percentage} 
-              color="primary"
-              height="small" 
-            />
-          </div>
+          )}
         </div>
         
         {/* Current lesson info */}
@@ -308,8 +384,11 @@ const CourseContentPage = () => {
                   {module.id.toString() === currentModule?.id.toString() ? (
                     <div className="space-y-2 py-1">
                       {currentModule.lessons.map((lesson) => {
+                        // Determine lesson status indicators
                         const isCompleted = progress.completed_lessons?.includes(parseInt(lesson.id)) || false;
                         const isActive = lesson.id.toString() === lessonId;
+                        const isLocked = lesson.access_level && 
+                          (lesson.access_level === 'advanced' && userAccessLevel !== 'advanced');
                         
                         return (
                           <div 
@@ -319,7 +398,9 @@ const CourseContentPage = () => {
                                 ? 'bg-primary-50 text-primary-900' 
                                 : isCompleted 
                                   ? 'text-gray-700 hover:bg-gray-50' 
-                                  : 'text-gray-600 hover:bg-gray-50'
+                                  : isLocked
+                                    ? 'text-gray-400 hover:bg-gray-50'
+                                    : 'text-gray-600 hover:bg-gray-50'
                             }`}
                             onClick={() => navigateToLesson(module.id, lesson.id)}
                           >
@@ -328,16 +409,30 @@ const CourseContentPage = () => {
                                 ? 'bg-green-500' 
                                 : isActive 
                                   ? 'bg-primary-500' 
-                                  : 'bg-gray-200'
+                                  : isLocked
+                                    ? 'bg-gray-300'
+                                    : 'bg-gray-200'
                             }`}>
                               {isCompleted && (
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
                               )}
+                              {isLocked && (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
                             </div>
                             <div className="flex-grow min-w-0">
-                              <div className="text-sm font-medium truncate">{lesson.title}</div>
+                              <div className="text-sm font-medium truncate">
+                                {lesson.title}
+                                {isLocked && (
+                                  <span className="ml-1 text-xs font-normal text-amber-500">
+                                    (Premium)
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center text-xs text-gray-500">
                                 <span>{lesson.type}</span>
                                 <span className="mx-1">•</span>
@@ -398,46 +493,191 @@ const CourseContentPage = () => {
                 <div className="bg-white shadow-md rounded-xl p-6 mb-6">
                   {activeTab === 'content' && (
                     <AnimatedElement type="fade-in">
-                      <div 
-                        className="prose prose-primary max-w-none"
-                        dangerouslySetInnerHTML={{ __html: currentLesson.content || 'Content is being prepared...' }}
-                      />
-                      
-                      {!currentLesson.is_completed && (
-                        <div className="mt-8 border-t pt-6">
-                          <Button 
-                            color="primary" 
-                            size="medium" 
-                            onClick={completeLesson}
-                          >
-                            Mark as Completed
-                          </Button>
-                        </div>
-                      )}
-                      
-                      {currentLesson.has_assessment && (
-                        <div className="mt-8 border-t pt-6">
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <div>
-                              <h3 className="font-semibold text-amber-800 mb-1">Knowledge Check</h3>
-                              <p className="text-amber-700 mb-3">Complete this quick assessment to check your understanding of the key concepts in this lesson.</p>
-                              <Button 
-                                color="secondary" 
-                                size="small" 
-                                className="font-medium"
-                                onClick={() => navigate(`/courses/${courseSlug}/assessment/${currentLesson.id}`)}
-                              >
-                                Start Assessment
-                              </Button>
+                      {/* Use ContentAccessController for tiered access */}
+                      <ContentAccessController
+                        requiredLevel={currentLesson.access_level || 'intermediate'}
+                        basicContent={
+                          <div className="prose prose-primary max-w-none">
+                            <div dangerouslySetInnerHTML={{ 
+                              __html: currentLesson.basic_content || DEFAULT_PREVIEW_CONTENT(currentLesson.title) 
+                            }} />
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
+                              <h3 className="font-semibold text-amber-800 mb-1">Free Preview</h3>
+                              <p className="text-amber-700">This is a preview of this lesson. Register for free to access the full content.</p>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        }
+                        intermediateContent={
+                          <div className="prose prose-primary max-w-none">
+                            {currentLesson.access_level === 'advanced' ? (
+                              <div>
+                                <div dangerouslySetInnerHTML={{ 
+                                  __html: currentLesson.intermediate_content || currentLesson.content 
+                                }} />
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
+                                  <h3 className="font-semibold text-amber-800 mb-1">Upgrade to Premium</h3>
+                                  <p className="text-amber-700">Subscribe to access advanced content, downloadable resources, and certificates.</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div dangerouslySetInnerHTML={{ __html: currentLesson.content || 'Content is being prepared...' }} />
+                            )}
+                            
+                            {/* Only show completion button for authenticated users */}
+                            {isAuthenticated() && !currentLesson.is_completed && (
+                              <div className="mt-8 border-t pt-6">
+                                <Button 
+                                  color="primary" 
+                                  size="medium" 
+                                  onClick={completeLesson}
+                                >
+                                  Mark as Completed
+                                </Button>
+                              </div>
+                            )}
+                            
+                            {/* Only show assessment for authenticated users */}
+                            {isAuthenticated() && currentLesson.has_assessment && (
+                              <div className="mt-8 border-t pt-6">
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <div>
+                                    <h3 className="font-semibold text-amber-800 mb-1">Knowledge Check</h3>
+                                    <p className="text-amber-700 mb-3">Complete this quick assessment to check your understanding of the key concepts in this lesson.</p>
+                                    <Button 
+                                      color="secondary" 
+                                      size="small" 
+                                      className="font-medium"
+                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${currentLesson.id}`)}
+                                    >
+                                      Start Assessment
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        }
+                        advancedContent={
+                          <div className="prose prose-primary max-w-none">
+                            <div dangerouslySetInnerHTML={{ __html: currentLesson.content || 'Content is being prepared...' }} />
+                            
+                            {/* Advanced content elements like downloadable materials */}
+                            {currentLesson.premium_resources && currentLesson.premium_resources.length > 0 && (
+                              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+                                <h3 className="text-green-800 font-semibold mb-2">Premium Resources</h3>
+                                <ul className="list-disc pl-5 space-y-2">
+                                  {currentLesson.premium_resources.map((resource, index) => (
+                                    <li key={index} className="text-green-700">
+                                      <a 
+                                        href={resource.url} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="text-primary-600 hover:underline"
+                                      >
+                                        {resource.title}
+                                      </a>
+                                      {resource.description && (
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          {resource.description}
+                                        </p>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {/* Only show completion button for authenticated users */}
+                            {isAuthenticated() && !currentLesson.is_completed && (
+                              <div className="mt-8 border-t pt-6">
+                                <Button 
+                                  color="primary" 
+                                  size="medium" 
+                                  onClick={completeLesson}
+                                >
+                                  Mark as Completed
+                                </Button>
+                              </div>
+                            )}
+                            
+                            {/* Only show assessment for authenticated users */}
+                            {isAuthenticated() && currentLesson.has_assessment && (
+                              <div className="mt-8 border-t pt-6">
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <div>
+                                    <h3 className="font-semibold text-amber-800 mb-1">Knowledge Check</h3>
+                                    <p className="text-amber-700 mb-3">Complete this quick assessment to check your understanding of the key concepts in this lesson.</p>
+                                    <Button 
+                                      color="secondary" 
+                                      size="small" 
+                                      className="font-medium"
+                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${currentLesson.id}`)}
+                                    >
+                                      Start Assessment
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Only show lab for authenticated users */}
+                            {isAuthenticated() && currentLesson.has_lab && (
+                              <div className="mt-8 border-t pt-6">
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                  </svg>
+                                  <div>
+                                    <h3 className="font-semibold text-blue-800 mb-1">Hands-on Lab Exercise</h3>
+                                    <p className="text-blue-700 mb-3">Apply what you've learned in this interactive lab environment.</p>
+                                    <Button 
+                                      color="primary" 
+                                      size="small" 
+                                      className="font-medium"
+                                      onClick={() => navigate(`/courses/${courseSlug}/lab/${currentLesson.id}`)}
+                                    >
+                                      Open Virtual Lab
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Certificate eligibility notification for completed course (authenticated only) */}
+                            {isAuthenticated() && courseData.user_progress && courseData.user_progress.percentage >= 100 && (
+                              <div className="mt-8 border-t pt-6">
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <div>
+                                    <h3 className="font-semibold text-green-800 mb-1">Course Completed!</h3>
+                                    <p className="text-green-700 mb-3">Congratulations on completing this course. Your certificate is now available.</p>
+                                    <Button 
+                                      color="primary" 
+                                      size="small" 
+                                      className="font-medium"
+                                      onClick={() => navigate(`/certificates/${courseData.id}`)}
+                                    >
+                                      View Certificate
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        }
+                        upgradeMessage={ACCESS_LEVEL_MESSAGES[currentLesson.access_level || 'intermediate']}
+                      />
                       
-                      {currentLesson.has_lab && (
+                      {/* Only show lab button for authenticated intermediate+ users */}
+                      {isAuthenticated() && currentLesson.has_lab && userAccessLevel !== 'basic' && (
                         <div className="mt-8 border-t pt-6">
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -461,6 +701,7 @@ const CourseContentPage = () => {
                     </AnimatedElement>
                   )}
                   
+                  {/* Resources tab */}
                   {activeTab === 'resources' && (
                     <AnimatedElement type="fade-in">
                       <h3 className="text-xl font-display font-semibold mb-4">Additional Resources</h3>
@@ -500,32 +741,87 @@ const CourseContentPage = () => {
                                 <div>
                                   <h4 className="font-medium text-primary-800 mb-1">{resource.title}</h4>
                                   <p className="text-sm text-gray-600 mb-2">{resource.description}</p>
+                                  {/* Show access badge for premium resources */}
+                                  {resource.premium && (
+                                    <Badge color="amber" className="mb-2">Premium Resource</Badge>
+                                  )}
                                   {resource.file && (
-                                    <a 
-                                      href={resource.file} 
-                                      className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      Download
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                      </svg>
-                                    </a>
+                                    <ContentAccessController
+                                      requiredLevel={resource.premium ? 'advanced' : 'intermediate'}
+                                      basicContent={
+                                        <p className="text-sm text-gray-500">Sign in to download resources</p>
+                                      }
+                                      intermediateContent={
+                                        resource.premium ? (
+                                          <p className="text-sm text-gray-500">Upgrade to premium to download</p>
+                                        ) : (
+                                          <a 
+                                            href={resource.file} 
+                                            className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            Download
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                                            </svg>
+                                          </a>
+                                        )
+                                      }
+                                      advancedContent={
+                                        <a 
+                                          href={resource.file} 
+                                          className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Download
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                                          </svg>
+                                        </a>
+                                      }
+                                    />
                                   )}
                                   {resource.url && (
-                                    <a 
-                                      href={resource.url} 
-                                      className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      Visit Resource
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                      </svg>
-                                    </a>
+                                    <ContentAccessController
+                                      requiredLevel={resource.premium ? 'advanced' : 'intermediate'}
+                                      basicContent={
+                                        <p className="text-sm text-gray-500">Sign in to access resources</p>
+                                      }
+                                      intermediateContent={
+                                        resource.premium ? (
+                                          <p className="text-sm text-gray-500">Upgrade to premium to access</p>
+                                        ) : (
+                                          <a 
+                                            href={resource.url} 
+                                            className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            Visit Resource
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                              <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                              <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                            </svg>
+                                          </a>
+                                        )
+                                      }
+                                      advancedContent={
+                                        <a 
+                                          href={resource.url} 
+                                          className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Visit Resource
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                          </svg>
+                                        </a>
+                                      }
+                                    />
                                   )}
                                 </div>
                               </div>
@@ -543,6 +839,7 @@ const CourseContentPage = () => {
                     </AnimatedElement>
                   )}
                   
+                  {/* Notes tab - only for authenticated users */}
                   {activeTab === 'notes' && (
                     <AnimatedElement type="fade-in">
                       <div>
@@ -550,75 +847,97 @@ const CourseContentPage = () => {
                           <h3 className="text-xl font-display font-semibold">My Notes</h3>
                         </div>
                         
-                        <div className="mb-6">
-                          <textarea 
-                            className="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                            placeholder="Type your notes here..."
-                            value={noteContent}
-                            onChange={(e) => setNoteContent(e.target.value)}
-                          ></textarea>
-                          <div className="flex justify-end mt-2">
-                            <Button 
-                              color="primary" 
-                              size="small"
-                              onClick={handleSaveNote}
-                              disabled={!noteContent.trim()}
-                            >
-                              Save Note
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {userNotes.length > 0 ? (
-                          <div className="space-y-4">
-                            {userNotes.map(note => (
-                              <div key={note.id} className="bg-gray-50 p-4 rounded-lg">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="text-sm text-gray-500">
-                                    {new Date(note.created_date).toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </div>
-                                  <div className="flex space-x-2">
-                                    <button 
-                                      className="text-primary-600 hover:text-primary-800 text-sm"
-                                      onClick={() => {
-                                        setNoteContent(note.content);
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-                                    <button 
-                                      className="text-red-600 hover:text-red-800 text-sm"
-                                      onClick={async () => {
-                                        try {
-                                          await noteService.deleteNote(note.id);
-                                          setUserNotes(userNotes.filter(n => n.id !== note.id));
-                                        } catch (err) {
-                                          console.error('Failed to delete note:', err);
-                                        }
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
+                        <ContentAccessController
+                          requiredLevel="intermediate"
+                          basicContent={
+                            <div className="text-center py-8 bg-gray-50 rounded-lg">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              <p className="text-gray-600 mb-4">You need to register to take notes on lessons.</p>
+                              <Button 
+                                color="primary" 
+                                size="small"
+                                onClick={() => navigate('/register', { state: { from: location.pathname } })}
+                              >
+                                Register for Free
+                              </Button>
+                            </div>
+                          }
+                          intermediateContent={
+                            <div>
+                              <div className="mb-6">
+                                <textarea 
+                                  className="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                                  placeholder="Type your notes here..."
+                                  value={noteContent}
+                                  onChange={(e) => setNoteContent(e.target.value)}
+                                ></textarea>
+                                <div className="flex justify-end mt-2">
+                                  <Button 
+                                    color="primary" 
+                                    size="small"
+                                    onClick={handleSaveNote}
+                                    disabled={!noteContent.trim()}
+                                  >
+                                    Save Note
+                                  </Button>
                                 </div>
-                                <p className="text-gray-700 whitespace-pre-wrap">{note.content}</p>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 bg-gray-50 rounded-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            <p className="text-gray-600">You haven't added any notes for this lesson yet.</p>
-                          </div>
-                        )}
+                              
+                              {userNotes.length > 0 ? (
+                                <div className="space-y-4">
+                                  {userNotes.map(note => (
+                                    <div key={note.id} className="bg-gray-50 p-4 rounded-lg">
+                                      <div className="flex justify-between items-start mb-2">
+                                        <div className="text-sm text-gray-500">
+                                          {new Date(note.created_date).toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </div>
+                                        <div className="flex space-x-2">
+                                          <button 
+                                            className="text-primary-600 hover:text-primary-800 text-sm"
+                                            onClick={() => {
+                                              setNoteContent(note.content);
+                                            }}
+                                          >
+                                            Edit
+                                          </button>
+                                          <button 
+                                            className="text-red-600 hover:text-red-800 text-sm"
+                                            onClick={async () => {
+                                              try {
+                                                await noteService.deleteNote(note.id);
+                                                setUserNotes(userNotes.filter(n => n.id !== note.id));
+                                              } catch (err) {
+                                                console.error('Failed to delete note:', err);
+                                              }
+                                            }}
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <p className="text-gray-700 whitespace-pre-wrap">{note.content}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                  <p className="text-gray-600">You haven't added any notes for this lesson yet.</p>
+                                </div>
+                              )}
+                            </div>
+                          }
+                        />
                       </div>
                     </AnimatedElement>
                   )}

@@ -14,6 +14,7 @@ Get-ChildItem -Recurse -Force |
     $_.FullName      -notlike '*\dist-ssr\*'              -and
     $_.FullName      -notlike '*\.vscode\*'               -and
     $_.FullName      -notlike '*\.idea\*'                 -and
+    $_.FullName      -notlike '*\.git\*'                 -and
     $_.Name          -notlike '*.log'                    -and
     $_.Name          -notlike 'npm-debug.log*'            -and
     $_.Name          -notlike 'yarn-debug.log*'           -and
@@ -25,6 +26,7 @@ Get-ChildItem -Recurse -Force |
     $_.Name          -notlike '*.njsproj'                -and
     $_.Name          -notlike '*.sln'                    -and
     $_.Name          -notlike '*.sw?'                    -and
+    $_.Name          -notlike '*\.git\*'                 -and    
     $_.Name          -notlike '*.local'                  -and
     $_.Name          -ne '.DS_Store'
   } |

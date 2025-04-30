@@ -1,3 +1,28 @@
+"""
+File: backend/courses/views.py
+Purpose: API views for handling course-related data and enforcing access controls
+
+Key views:
+- CategoryViewSet: Course categories
+- CourseViewSet: Course details and enrollment
+- LessonViewSet: Lessons with tiered access control
+- LessonDetailView: Lessons with tiered access control
+- CompleteLesson: Mark lessons as completed
+- CertificateViewSet: Access to course completion certificates (premium users only)
+
+Modified for tiered access:
+- Added user_access_level to context in views using utils.get_user_access_level
+- Updated access control for certificates
+- Added tiered content access to resource endpoints
+
+Connected files:
+1. backend/courses/serializers.py - Used by these views to format API responses
+2. backend/courses/models.py - The database models being accessed
+3. backend/courses/urls.py - Configures URL routing to these views
+4. backend/users/models.py - User and subscription models
+5. backend/courses/utils.py - Utility functions for access control
+"""
+
 from rest_framework import viewsets, status, generics, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -21,6 +46,7 @@ from .serializers import (
     CertificateSerializer
 )
 from .permissions import IsEnrolledOrReadOnly, IsEnrolled
+from .utils import get_user_access_level
 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -34,7 +60,14 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 class LessonViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
-    permission_classes = [IsEnrolled]
+
+    # Update permission_classes to allow unauthenticated access with restrictions
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['user_access_level'] = get_user_access_level(self.request)
+        return context
 
 
 class EnrollmentViewSet(viewsets.ModelViewSet):
@@ -67,6 +100,9 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
             'request': self.request,
             'currency': 'INR',  # Add currency information
         })
+
+        # Add user access level to context
+        context['user_access_level'] = get_user_access_level(self.request)
         return context
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
@@ -159,37 +195,54 @@ class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
             return ModuleDetailSerializer
         return ModuleSerializer
 
-    @action(detail=True, methods=['get'], permission_classes=[IsEnrolled])
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['user_access_level'] = get_user_access_level(self.request)
+        return context
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
     def lessons(self, request, pk=None):
         module = self.get_object()
         lessons = module.lessons.all().order_by('order')
-        serializer = LessonSerializer(lessons, many=True)
+
+        # Add user's access level to context
+        context = self.get_serializer_context()
+        serializer = LessonSerializer(lessons, many=True, context=context)
         return Response(serializer.data)
 
 
 class LessonDetailView(generics.RetrieveAPIView):
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
-    permission_classes = [IsEnrolled]
+
+    # Update permission_classes to allow unauthenticated access with restrictions
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['user_access_level'] = get_user_access_level(self.request)
+        return context
 
     def retrieve(self, request, *args, **kwargs):
         lesson = self.get_object()
 
-        # Update user's last accessed time for the course
-        try:
-            enrollment = Enrollment.objects.get(
-                user=request.user,
-                course=lesson.module.course
-            )
-            enrollment.last_accessed = timezone.now()
-            enrollment.save(update_fields=['last_accessed'])
-        except Enrollment.DoesNotExist:
-            pass
+        # For authenticated users, update access timestamp
+        if request.user.is_authenticated:
+            try:
+                enrollment = Enrollment.objects.get(
+                    user=request.user,
+                    course=lesson.module.course
+                )
+                enrollment.last_accessed = timezone.now()
+                enrollment.save(update_fields=['last_accessed'])
+            except Enrollment.DoesNotExist:
+                pass
 
         return super().retrieve(request, *args, **kwargs)
 
 
 class CompleteLesson(generics.UpdateAPIView):
+    # Only authenticated and enrolled users can complete lessons
     permission_classes = [IsEnrolled]
 
     def update(self, request, pk=None):
@@ -237,12 +290,18 @@ class CompleteLesson(generics.UpdateAPIView):
 
             # Generate certificate if course has certificate feature
             if lesson.module.course.has_certificate:
-                certificate, created = Certificate.objects.get_or_create(
-                    enrollment=enrollment,
-                    defaults={
-                        'certificate_number': f"CERT-{enrollment.id}-{timezone.now().strftime('%Y%m%d%H%M')}"
-                    }
-                )
+                # Check if user has premium subscription for certificate
+                user_access_level = get_user_access_level(request)
+                has_premium = user_access_level == 'advanced'
+
+                # Only create certificate for premium users
+                if has_premium:
+                    certificate, created = Certificate.objects.get_or_create(
+                        enrollment=enrollment,
+                        defaults={
+                            'certificate_number': f"CERT-{enrollment.id}-{timezone.now().strftime('%Y%m%d%H%M')}"
+                        }
+                    )
 
         return Response({
             'is_completed': True,
@@ -424,3 +483,52 @@ class UserProgressView(generics.ListAPIView):
             course_id=course_id
         )
         return Progress.objects.filter(enrollment=enrollment)
+
+
+class CertificateViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for accessing course completion certificates.
+    Only available to users with premium subscriptions.
+    """
+    serializer_class = CertificateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Return only certificates for the current user"""
+        user = self.request.user
+        user_access_level = get_user_access_level(self.request)
+
+        # Check if user has premium subscription
+        if user_access_level != 'advanced':
+            # Non-premium users don't see certificates
+            return Certificate.objects.none()
+
+        # Return certificates for premium users
+        return Certificate.objects.filter(enrollment__user=user)
+
+    @action(detail=False, methods=['get'])
+    def course(self, request):
+        """Get certificate for a specific course"""
+        course_id = request.query_params.get('course_id')
+        if not course_id:
+            return Response(
+                {'error': 'Course ID is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user has premium subscription
+        user_access_level = get_user_access_level(request)
+        if user_access_level != 'advanced':
+            return Response(
+                {'error': 'Premium subscription required to access certificates'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        certificate = get_object_or_404(
+            Certificate,
+            enrollment__user=request.user,
+            enrollment__course_id=course_id
+        )
+
+        serializer = self.get_serializer(certificate)
+        return Response(serializer.data)

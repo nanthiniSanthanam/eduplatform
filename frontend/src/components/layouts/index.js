@@ -23,7 +23,7 @@
 // Layout Components
 import Footer from './Footer';
 import Header from './Header';
-
+import MainLayout from './MainLayout';
 
 // Export individual components
 export {
@@ -31,6 +31,7 @@ export {
 
   Footer,
   Header,
+  MainLayout,
   
 };
 

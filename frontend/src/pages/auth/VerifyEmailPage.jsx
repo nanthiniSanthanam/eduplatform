@@ -1,27 +1,46 @@
 /**
  * File: frontend/src/pages/auth/VerifyEmailPage.jsx
- * Purpose: Handles email verification process
+ * Purpose: Handles email verification process and resend functionality
+ * Last Updated: 2025-04-29 16:41:25
+ * Updated By: cadsanthanam
  * 
  * Key features:
- * 1. Verifies email tokens automatically from URL
- * 2. Shows success/error messages
+ * 1. Verifies email tokens automatically from URL query parameters
+ * 2. Shows success/error messages based on verification result
  * 3. Provides option to request a new verification email
  * 4. Directs users to next steps after verification
+ * 5. Handles "already verified" state elegantly
+ * 6. Auto-redirects after successful verification with countdown
+ * 7. Validates email format before submission
+ * 
+ * API Endpoints Used:
+ * - POST /api/user/email/verify/ - Verify email with token
+ * - POST /api/user/email/verify/resend/ - Resend verification email
  * 
  * Implementation notes:
- * - Uses token from URL params if available
- * - Connects with authService.verifyEmail API
- * - Handles various verification states
+ * - Uses token from URL query params using useSearchParams
+ * - Connects with authService (verifyEmail, resendVerification) for API communication
+ * - Handles various verification states with proper UI feedback
+ * - Special handling for "already verified" error as a success state
+ * 
+ * Variables to modify if needed:
+ * - redirectPath: Where to send the user after successful verification (default: '/login')
+ * - redirectDelay: How many seconds to wait before auto-redirect (default: 5)
  */
 
-import React, { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const VerifyEmailPage = () => {
-  const { token } = useParams();
-  const { verifyEmail, currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const { verifyEmail, resendVerification, currentUser } = useAuth();
   const navigate = useNavigate();
+  
+  // Configuration variables
+  const redirectPath = '/login';
+  const redirectDelay = 5; // seconds before auto-redirect
   
   const [verificationState, setVerificationState] = useState({
     status: token ? 'verifying' : 'manual',
@@ -29,42 +48,94 @@ const VerifyEmailPage = () => {
   });
 
   const [email, setEmail] = useState('');
+  const [countdown, setCountdown] = useState(redirectDelay);
+  const [emailError, setEmailError] = useState('');
   
+  // Initialize email field if user is logged in
   useEffect(() => {
-    // If token is provided in URL, verify automatically
-    const verifyToken = async () => {
-      if (token) {
-        try {
-          const result = await verifyEmail(token);
-          if (result.success) {
-            setVerificationState({
-              status: 'success',
-              message: 'Your email has been successfully verified!'
-            });
-          } else {
-            setVerificationState({
-              status: 'error',
-              message: result.error || 'Failed to verify email. The token may be invalid or expired.'
-            });
-          }
-        } catch (error) {
+    if (currentUser && currentUser.email) {
+      setEmail(currentUser.email);
+    }
+  }, [currentUser]);
+  
+  // Handle countdown for automatic redirect
+  useEffect(() => {
+    let timer;
+    if (verificationState.status === 'success' && countdown > 0) {
+      timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+    } else if (verificationState.status === 'success' && countdown === 0) {
+      navigate(redirectPath);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [countdown, verificationState.status, navigate, redirectPath]);
+
+  const verifyToken = useCallback(async () => {
+    if (token) {
+      try {
+        setVerificationState({
+          status: 'verifying',
+          message: 'Verifying your email...'
+        });
+        
+        const result = await verifyEmail(token);
+        if (result.success) {
+          setVerificationState({
+            status: 'success',
+            message: 'Your email has been successfully verified!'
+          });
+        } else {
           setVerificationState({
             status: 'error',
-            message: 'An error occurred during verification. Please try again.'
+            message: result.error || 'Failed to verify email. The token may be invalid or expired.'
+          });
+        }
+      } catch (error) {
+        // Check for network errors
+        if (!navigator.onLine) {
+          setVerificationState({
+            status: 'error',
+            message: 'No internet connection. Please check your connection and try again.'
+          });
+        } else {
+          // Parse server error message if available
+          const serverMessage = error.response?.data?.detail || error.message || 'An error occurred during verification.';
+          setVerificationState({
+            status: 'error',
+            message: serverMessage
           });
         }
       }
-    };
-
-    verifyToken();
+    }
   }, [token, verifyEmail]);
+  
+  useEffect(() => {
+    if (token) {
+      verifyToken();
+    }
+  }, [token, verifyToken]);
+
+  // Email validation function
+  const validateEmail = (email) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
 
   const handleResendVerification = async () => {
+    // Clear previous errors
+    setEmailError('');
+    
     if (!email) {
-      setVerificationState({
-        ...verificationState,
-        error: 'Please enter your email address'
-      });
+      setEmailError('Please enter your email address');
+      return;
+    }
+    
+    if (!validateEmail(email)) {
+      setEmailError('Please enter a valid email address');
       return;
     }
 
@@ -74,31 +145,62 @@ const VerifyEmailPage = () => {
         message: 'Sending verification email...'
       });
 
-      // Call API to resend verification email
-      const response = await fetch('/api/users/resend-verification/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+      await resendVerification(email);
+
+      setVerificationState({
+        status: 'sent',
+        message: 'A new verification email has been sent. Please check your inbox.'
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
+    } catch (error) {
+      // Handle "already verified" as a success case
+      if (error.response?.data?.detail === "Email address is already verified.") {
         setVerificationState({
-          status: 'sent',
-          message: 'A new verification email has been sent. Please check your inbox.'
+          status: 'success',
+          message: 'This email is already verified! You can proceed to login.'
+        });
+        return;
+      }
+      
+      // Handle network errors
+      if (!navigator.onLine) {
+        setVerificationState({
+          status: 'error',
+          message: 'No internet connection. Please check your connection and try again.'
         });
       } else {
-        throw new Error(result.detail || 'Failed to resend verification email');
+        // Parse server error message if available
+        const serverMessage = error.response?.data?.detail || error.message || 'Failed to resend verification email';
+        setVerificationState({
+          status: 'error',
+          message: serverMessage
+        });
       }
-    } catch (error) {
-      setVerificationState({
-        status: 'error',
-        message: error.message,
-        error: true
-      });
     }
   };
+
+  const renderEmailForm = () => (
+    <div className="mt-1">
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autoComplete="email"
+        placeholder="Enter your email address"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className={`appearance-none block w-full px-3 py-2 border ${
+          emailError ? 'border-red-500' : 'border-gray-300'
+        } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm mb-2`}
+      />
+      {emailError && <p className="text-red-500 text-xs mb-2">{emailError}</p>}
+      <button
+        onClick={handleResendVerification}
+        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+      >
+        Resend Verification Email
+      </button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -124,8 +226,11 @@ const VerifyEmailPage = () => {
               </svg>
               <p className="mt-4 text-lg text-gray-800">{verificationState.message}</p>
               <div className="mt-6">
-                <Link to="/login" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                  Go to Login
+                <p className="text-sm text-gray-600 mb-4">
+                  Redirecting to login in {countdown} seconds...
+                </p>
+                <Link to={redirectPath} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                  Go to Login Now
                 </Link>
               </div>
             </div>
@@ -139,24 +244,7 @@ const VerifyEmailPage = () => {
               <p className="mt-4 text-lg text-red-800">{verificationState.message}</p>
               <div className="mt-6">
                 <p className="mb-4 text-sm text-gray-600">Need a new verification link?</p>
-                <div className="mt-1">
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Enter your email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm mb-4"
-                  />
-                  <button
-                    onClick={handleResendVerification}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Resend Verification Email
-                  </button>
-                </div>
+                {renderEmailForm()}
               </div>
             </div>
           )}
@@ -172,24 +260,7 @@ const VerifyEmailPage = () => {
               </p>
               <div className="mt-6">
                 <p className="mb-4 text-sm text-gray-600">Didn't receive an email?</p>
-                <div className="mt-1">
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Enter your email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm mb-4"
-                  />
-                  <button
-                    onClick={handleResendVerification}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Resend Verification Email
-                  </button>
-                </div>
+                {renderEmailForm()}
               </div>
             </div>
           )}
@@ -208,7 +279,7 @@ const VerifyEmailPage = () => {
               </svg>
               <p className="mt-4 text-lg text-gray-800">{verificationState.message}</p>
               <div className="mt-6">
-                <Link to="/login" className="text-primary-600 hover:text-primary-500">
+                <Link to={redirectPath} className="text-primary-600 hover:text-primary-500">
                   Return to login
                 </Link>
               </div>

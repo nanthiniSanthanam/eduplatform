@@ -1,9 +1,9 @@
 """
 File: backend/users/views.py
-Purpose: Provides API views for user management and authentication in EduPlatform.
+Purpose: Provides API views for user management, authentication and subscription management in EduPlatform.
 
 This file contains:
-- RegisterView: User registration and account creation
+- RegisterView: User registration and account creation with default subscription
 - LoginView: User authentication and token generation
 - LogoutView: User logout and token invalidation
 - UserView: Retrieve and update user information
@@ -13,12 +13,26 @@ This file contains:
 - PasswordChangeView: Change user password (authenticated)
 - ProfileView: Retrieve and update user profile information
 - UserSessionView: View and manage active user sessions
+- SubscriptionViewSet: View and manage user subscription tiers and access levels
+
+Modification variables:
+- DEFAULT_SUBSCRIPTION_DAYS: Length of subscriptions in days (default: 30)
+- SUBSCRIPTION_PRICES: Pricing for each subscription tier (modify for your pricing structure)
+- EMAIL_VERIFICATION_EXPIRY_HOURS: How long email verification links are valid (default: 48)
+- PASSWORD_RESET_EXPIRY_HOURS: How long password reset links are valid (default: 24)
+
+Connected files:
+1. backend/users/serializers.py - Contains serializers used by these views
+2. backend/users/models.py - User, Profile, and Subscription models
+3. backend/users/permissions.py - Custom permission classes
+4. frontend/src/contexts/AuthContext.jsx - Consumes these API endpoints
 """
 
 from rest_framework import generics, status, views, viewsets, permissions
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
@@ -35,19 +49,28 @@ from .serializers import (
     UserSerializer, UserCreateSerializer, UserDetailSerializer,
     ProfileSerializer, LoginSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, EmailVerificationSerializer,
-    PasswordChangeSerializer
+    PasswordChangeSerializer, UpdateProfileSerializer, SubscriptionSerializer
 )
-from .models import Profile, EmailVerification, PasswordReset, UserSession
+from .models import Profile, EmailVerification, PasswordReset, UserSession, Subscription
 from .permissions import IsOwnerOrAdmin, IsUserOrAdmin
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+# Subscription configuration
+DEFAULT_SUBSCRIPTION_DAYS = 30
+SUBSCRIPTION_PRICES = {
+    'basic': 9.99,
+    'premium': 19.99,
+}
+EMAIL_VERIFICATION_EXPIRY_HOURS = 48
+PASSWORD_RESET_EXPIRY_HOURS = 24
+
 
 class RegisterView(generics.CreateAPIView):
     """
     API view to register a new user account.
-    Creates a user, profile, and sends verification email.
+    Creates a user, profile, subscription, and sends verification email.
     """
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer
@@ -63,6 +86,9 @@ class RegisterView(generics.CreateAPIView):
             user=user,
             is_used=False
         ).latest('created_at')
+
+        # Create default subscription (free tier)
+        Subscription.create_for_user(user)
 
         # Send verification email
         self._send_verification_email(user, verification.token)
@@ -82,7 +108,7 @@ class RegisterView(generics.CreateAPIView):
             message = render_to_string('users/email_verification.html', {
                 'user': user,
                 'verification_url': verification_url,
-                'valid_hours': 48,
+                'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
             })
 
             send_mail(
@@ -123,6 +149,10 @@ class LoginView(views.APIView):
         # Get tokens
         refresh = RefreshToken.for_user(user)
 
+        # Adjust token lifetime based on remember_me
+        if not remember_me:
+            refresh.set_exp(lifetime=timedelta(hours=24))
+
         # Create or update user session
         ip_address = self._get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
@@ -143,6 +173,12 @@ class LoginView(views.APIView):
             device_type=self._get_device_type(user_agent),
             location=self._get_location_from_ip(ip_address)
         )
+
+        # Ensure user has a subscription
+        try:
+            subscription = user.subscription
+        except Subscription.DoesNotExist:
+            subscription = Subscription.create_for_user(user)
 
         # Return authentication tokens
         data = {
@@ -249,6 +285,39 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return get_object_or_404(Profile, user=self.request.user)
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response(serializer.data)
+
+
+class UpdateProfileView(generics.GenericAPIView):
+    """
+    Comprehensive API view to update both user and profile information.
+    """
+    serializer_class = UpdateProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def put(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            instance=request.user,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Return complete updated user data
+        return Response(UserDetailSerializer(request.user).data)
+
 
 class PasswordChangeView(generics.GenericAPIView):
     """
@@ -292,7 +361,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
 
             # Create password reset token
             token = uuid.uuid4()
-            expiry = timezone.now() + timedelta(hours=24)
+            expiry = timezone.now() + timedelta(hours=PASSWORD_RESET_EXPIRY_HOURS)
 
             PasswordReset.objects.create(
                 user=user,
@@ -335,7 +404,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
             message = render_to_string('users/password_reset_email.html', {
                 'user': user,
                 'reset_url': reset_url,
-                'valid_hours': 24,
+                'valid_hours': PASSWORD_RESET_EXPIRY_HOURS,
             })
 
             send_mail(
@@ -469,7 +538,7 @@ class ResendVerificationView(generics.GenericAPIView):
 
             # Create new verification token
             token = uuid.uuid4()
-            expiry = timezone.now() + timedelta(hours=48)
+            expiry = timezone.now() + timedelta(hours=EMAIL_VERIFICATION_EXPIRY_HOURS)
 
             EmailVerification.objects.create(
                 user=user,
@@ -502,7 +571,7 @@ class ResendVerificationView(generics.GenericAPIView):
             message = render_to_string('users/email_verification.html', {
                 'user': user,
                 'verification_url': verification_url,
-                'valid_hours': 48,
+                'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
             })
 
             send_mail(
@@ -536,3 +605,128 @@ class UserSessionViewSet(viewsets.ModelViewSet):
             {"detail": "Session invalidated successfully."},
             status=status.HTTP_200_OK
         )
+
+
+class SubscriptionViewSet(viewsets.ModelViewSet):
+    """
+    API viewset to manage user subscriptions and tiered access.
+
+    Endpoints:
+    - GET /subscription/ - List user subscriptions
+    - GET /subscription/current/ - Get current subscription
+    - POST /subscription/upgrade/ - Upgrade to a paid tier
+    - POST /subscription/cancel/ - Cancel a subscription
+    - POST /subscription/downgrade/ - Downgrade to a lower tier
+
+    Access Levels:
+    - Unregistered users: Basic content
+    - Free tier: Intermediate content
+    - Paid tiers: Advanced content with certificates
+    """
+    serializer_class = SubscriptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Subscription.objects.filter(user=self.request.user)
+
+    def get_object(self):
+        """Get or create subscription for current user"""
+        try:
+            return Subscription.objects.get(user=self.request.user)
+        except Subscription.DoesNotExist:
+            return Subscription.create_for_user(self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Get current subscription status"""
+        subscription = self.get_object()
+        serializer = self.get_serializer(subscription)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def upgrade(self, request):
+        """Upgrade to a paid subscription tier"""
+        subscription = self.get_object()
+        tier = request.data.get('tier')
+
+        # Validate tier
+        if tier not in ['basic', 'premium']:
+            return Response({
+                'detail': 'Invalid subscription tier. Choose from: basic, premium'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # In a production app, this is where you'd integrate with a payment processor
+        # For now, we'll just update the subscription
+
+        # Update subscription with new tier
+        subscription.tier = tier
+        subscription.status = 'active'
+        subscription.end_date = timezone.now() + timedelta(days=DEFAULT_SUBSCRIPTION_DAYS)
+        subscription.last_payment_date = timezone.now()
+        subscription.is_auto_renew = request.data.get('auto_renew', True)
+        subscription.payment_method = request.data.get(
+            'payment_method', 'demo')
+        subscription.save()
+
+        logger.info(
+            f"User {request.user.email} upgraded subscription to {tier} tier")
+
+        serializer = self.get_serializer(subscription)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def cancel(self, request):
+        """Cancel a paid subscription"""
+        subscription = self.get_object()
+
+        # Can't cancel a free tier
+        if subscription.tier == 'free':
+            return Response({
+                'detail': 'Cannot cancel a free tier subscription'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark as cancelled but keep active until end date
+        subscription.status = 'cancelled'
+        subscription.is_auto_renew = False
+        subscription.save()
+
+        logger.info(
+            f"User {request.user.email} cancelled their {subscription.tier} subscription")
+
+        serializer = self.get_serializer(subscription)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def downgrade(self, request):
+        """Downgrade to a lower tier at end of current period"""
+        subscription = self.get_object()
+
+        # Can't downgrade free tier
+        if subscription.tier == 'free':
+            return Response({
+                'detail': 'Already on free tier'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # If premium, can downgrade to basic
+        if subscription.tier == 'premium':
+            new_tier = request.data.get('tier', 'basic')
+            if new_tier not in ['basic', 'free']:
+                return Response({
+                    'detail': 'Invalid downgrade tier. Choose from: basic, free'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update subscription to downgrade at end of period
+            subscription.tier = new_tier
+            subscription.save()
+
+        # If basic, can only downgrade to free
+        else:
+            subscription.tier = 'free'
+            subscription.end_date = None
+            subscription.save()
+
+        logger.info(
+            f"User {request.user.email} downgraded subscription to {subscription.tier} tier")
+
+        serializer = self.get_serializer(subscription)
+        return Response(serializer.data)

@@ -46,9 +46,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'django_extensions',
     # Local apps
     'users',
     'courses',
+
 
 ]
 
@@ -68,7 +70,7 @@ ROOT_URLCONF = 'educore.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -168,6 +170,9 @@ SIMPLE_JWT = {
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Vite default port
+    "http://localhost:3000",  # Common React port
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
 ]
 
 # Custom user model
@@ -176,3 +181,19 @@ AUTH_USER_MODEL = 'users.CustomUser'
 # Email verification settings
 ACCOUNT_EMAIL_VERIFICATION = True
 EMAIL_VERIFICATION_TIMEOUT_DAYS = 2  # Days
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+}

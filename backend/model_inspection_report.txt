@@ -1,0 +1,1469 @@
+
+================================================================================
+MODEL INSPECTION REPORT
+================================================================================
+Generated: 2025-04-27 23:47:18
+Django Version: 5.2
+Project: Educational Platform with Three-Tier Access
+
+================================================================================
+MODELS
+================================================================================
+
+App: admin
+----------------------------------------
+
+  Model: LogEntry
+    - id: AutoField (null=False, blank=True)
+    - action_time: DateTimeField (null=False, blank=False)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - content_type: ForeignKey -> ContentType (null=True, blank=True)
+    - object_id: TextField (null=True, blank=True)
+    - object_repr: CharField (null=False, blank=False, max_length=200)
+    - action_flag: PositiveSmallIntegerField (null=False, blank=False, choices=[1, 2, 3])
+    - change_message: TextField (null=False, blank=True)
+
+App: auth
+----------------------------------------
+
+  Model: Permission
+    - group: ManyToManyRel -> Group (null=True)
+    - user: ManyToManyRel -> CustomUser (null=True)
+    - id: AutoField (null=False, blank=True)
+    - name: CharField (null=False, blank=False, max_length=255)
+    - content_type: ForeignKey -> ContentType (null=False, blank=False)
+    - codename: CharField (null=False, blank=False, max_length=100)
+
+  Model: Group
+    - user: ManyToManyRel -> CustomUser (null=True)
+    - id: AutoField (null=False, blank=True)
+    - name: CharField (null=False, blank=False, max_length=150)
+    - permissions: ManyToManyField -> Permission (null=False, blank=True)
+
+App: contenttypes
+----------------------------------------
+
+  Model: ContentType
+    - logentry: ManyToOneRel -> LogEntry (null=True)
+    - permission: ManyToOneRel -> Permission (null=True)
+    - id: AutoField (null=False, blank=True)
+    - app_label: CharField (null=False, blank=False, max_length=100)
+    - model: CharField (null=False, blank=False, max_length=100)
+
+App: sessions
+----------------------------------------
+
+  Model: Session
+    - session_key: CharField (null=False, blank=False, max_length=40)
+    - session_data: TextField (null=False, blank=False)
+    - expire_date: DateTimeField (null=False, blank=False)
+
+App: messages
+----------------------------------------
+
+App: staticfiles
+----------------------------------------
+
+App: rest_framework
+----------------------------------------
+
+App: rest_framework_simplejwt
+----------------------------------------
+
+App: corsheaders
+----------------------------------------
+
+App: users
+----------------------------------------
+
+  Model: CustomUser
+    - logentry: ManyToOneRel -> LogEntry (null=True)
+    - profile: OneToOneRel -> Profile (null=True)
+    - email_verifications: ManyToOneRel -> EmailVerification (null=True)
+    - password_resets: ManyToOneRel -> PasswordReset (null=True)
+    - login_logs: ManyToOneRel -> LoginLog (null=True)
+    - sessions: ManyToOneRel -> UserSession (null=True)
+    - subscription: OneToOneRel -> Subscription (null=True)
+    - courses_teaching: ManyToOneRel -> CourseInstructor (null=True)
+    - enrollments: ManyToOneRel -> Enrollment (null=True)
+    - assessment_attempts: ManyToOneRel -> AssessmentAttempt (null=True)
+    - reviews: ManyToOneRel -> Review (null=True)
+    - notes: ManyToOneRel -> Note (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - password: CharField (null=False, blank=False, max_length=128)
+    - is_superuser: BooleanField (null=False, blank=False)
+    - first_name: CharField (null=False, blank=True, max_length=150)
+    - last_name: CharField (null=False, blank=True, max_length=150)
+    - is_staff: BooleanField (null=False, blank=False)
+    - email: EmailField (null=False, blank=False, max_length=254)
+    - username: CharField (null=False, blank=False, max_length=150)
+    - role: CharField (null=False, blank=False, max_length=20, choices=['student', 'instructor', 'admin', 'staff'])
+    - is_email_verified: BooleanField (null=False, blank=False)
+    - date_joined: DateTimeField (null=False, blank=False)
+    - last_login: DateTimeField (null=True, blank=True)
+    - failed_login_attempts: PositiveIntegerField (null=False, blank=False)
+    - temporary_ban_until: DateTimeField (null=True, blank=True)
+    - is_active: BooleanField (null=False, blank=False)
+    - groups: ManyToManyField -> Group (null=False, blank=True)
+    - user_permissions: ManyToManyField -> Permission (null=False, blank=True)
+
+  Model: Profile
+    - id: BigAutoField (null=False, blank=True)
+    - user: OneToOneField -> CustomUser (null=False, blank=False)
+    - profile_picture: ImageField (null=True, blank=True, max_length=100)
+    - bio: TextField (null=False, blank=True)
+    - date_of_birth: DateField (null=True, blank=True)
+    - phone_number: CharField (null=False, blank=True, max_length=20)
+    - address: TextField (null=False, blank=True)
+    - city: CharField (null=False, blank=True, max_length=100)
+    - state: CharField (null=False, blank=True, max_length=100)
+    - country: CharField (null=False, blank=True, max_length=100)
+    - postal_code: CharField (null=False, blank=True, max_length=20)
+    - website: URLField (null=False, blank=True, max_length=200)
+    - linkedin: URLField (null=False, blank=True, max_length=200)
+    - twitter: CharField (null=False, blank=True, max_length=100)
+    - github: CharField (null=False, blank=True, max_length=100)
+    - expertise: CharField (null=False, blank=True, max_length=200)
+    - teaching_experience: PositiveIntegerField (null=False, blank=False)
+    - educational_background: TextField (null=False, blank=True)
+    - interests: TextField (null=False, blank=True)
+    - receive_email_notifications: BooleanField (null=False, blank=False)
+    - receive_marketing_emails: BooleanField (null=False, blank=False)
+    - created_at: DateTimeField (null=False, blank=True)
+    - updated_at: DateTimeField (null=False, blank=True)
+
+  Model: EmailVerification
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - token: UUIDField (null=False, blank=False, max_length=32)
+    - created_at: DateTimeField (null=False, blank=True)
+    - expires_at: DateTimeField (null=False, blank=False)
+    - verified_at: DateTimeField (null=True, blank=True)
+    - is_used: BooleanField (null=False, blank=False)
+
+  Model: PasswordReset
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - token: UUIDField (null=False, blank=False, max_length=32)
+    - created_at: DateTimeField (null=False, blank=True)
+    - expires_at: DateTimeField (null=False, blank=False)
+    - used_at: DateTimeField (null=True, blank=True)
+    - is_used: BooleanField (null=False, blank=False)
+    - ip_address: GenericIPAddressField (null=True, blank=True, max_length=39)
+
+  Model: LoginLog
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - timestamp: DateTimeField (null=False, blank=True)
+    - ip_address: GenericIPAddressField (null=False, blank=False, max_length=39)
+    - user_agent: TextField (null=False, blank=False)
+    - successful: BooleanField (null=False, blank=False)
+
+  Model: UserSession
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - session_key: CharField (null=False, blank=False, max_length=255)
+    - ip_address: GenericIPAddressField (null=False, blank=False, max_length=39)
+    - user_agent: TextField (null=False, blank=False)
+    - created_at: DateTimeField (null=False, blank=True)
+    - expires_at: DateTimeField (null=False, blank=False)
+    - last_activity: DateTimeField (null=False, blank=True)
+    - is_active: BooleanField (null=False, blank=False)
+    - device_type: CharField (null=False, blank=True, max_length=50)
+    - location: CharField (null=False, blank=True, max_length=100)
+
+  Model: Subscription
+    - id: BigAutoField (null=False, blank=True)
+    - user: OneToOneField -> CustomUser (null=False, blank=False)
+    - tier: CharField (null=False, blank=False, max_length=20, choices=['free', 'basic', 'premium'])
+    - status: CharField (null=False, blank=False, max_length=20, choices=['active', 'expired', 'cancelled', 'pending'])
+    - start_date: DateTimeField (null=False, blank=True)
+    - end_date: DateTimeField (null=True, blank=True)
+    - is_auto_renew: BooleanField (null=False, blank=False)
+    - last_payment_date: DateTimeField (null=True, blank=True)
+    - payment_method: CharField (null=True, blank=True, max_length=50)
+    - payment_id: CharField (null=True, blank=True, max_length=100)
+
+App: courses
+----------------------------------------
+
+  Model: Category
+    - courses: ManyToOneRel -> Course (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - name: CharField (null=False, blank=False, max_length=100)
+    - description: TextField (null=True, blank=True)
+    - icon: CharField (null=True, blank=True, max_length=50)
+    - slug: SlugField (null=False, blank=True, max_length=50)
+
+  Model: Course
+    - instructors: ManyToOneRel -> CourseInstructor (null=True)
+    - modules: ManyToOneRel -> Module (null=True)
+    - enrollments: ManyToOneRel -> Enrollment (null=True)
+    - reviews: ManyToOneRel -> Review (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - title: CharField (null=False, blank=False, max_length=255)
+    - subtitle: CharField (null=True, blank=True, max_length=255)
+    - slug: SlugField (null=False, blank=True, max_length=50)
+    - description: TextField (null=False, blank=False)
+    - category: ForeignKey -> Category (null=False, blank=False)
+    - thumbnail: ImageField (null=True, blank=True, max_length=100)
+    - price: DecimalField (null=False, blank=False)
+    - discount_price: DecimalField (null=True, blank=True)
+    - discount_ends: DateTimeField (null=True, blank=True)
+    - level: CharField (null=False, blank=False, max_length=20, choices=['beginner', 'intermediate', 'advanced', 'all_levels'])
+    - duration: CharField (null=True, blank=True, max_length=50)
+    - has_certificate: BooleanField (null=False, blank=False)
+    - is_featured: BooleanField (null=False, blank=False)
+    - is_published: BooleanField (null=False, blank=False)
+    - published_date: DateTimeField (null=False, blank=True)
+    - updated_date: DateTimeField (null=False, blank=True)
+    - requirements: JSONField (null=True, blank=True)
+    - skills: JSONField (null=True, blank=True)
+
+  Model: CourseInstructor
+    - id: BigAutoField (null=False, blank=True)
+    - course: ForeignKey -> Course (null=False, blank=False)
+    - instructor: ForeignKey -> CustomUser (null=False, blank=False)
+    - title: CharField (null=True, blank=True, max_length=100)
+    - bio: TextField (null=True, blank=True)
+    - is_lead: BooleanField (null=False, blank=False)
+
+  Model: Module
+    - lessons: ManyToOneRel -> Lesson (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - course: ForeignKey -> Course (null=False, blank=False)
+    - title: CharField (null=False, blank=False, max_length=255)
+    - description: TextField (null=True, blank=True)
+    - order: PositiveIntegerField (null=False, blank=False)
+    - duration: CharField (null=True, blank=True, max_length=50)
+
+  Model: Lesson
+    - resources: ManyToOneRel -> Resource (null=True)
+    - assessment: OneToOneRel -> Assessment (null=True)
+    - progress: ManyToOneRel -> Progress (null=True)
+    - notes: ManyToOneRel -> Note (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - module: ForeignKey -> Module (null=False, blank=False)
+    - title: CharField (null=False, blank=False, max_length=255)
+    - content: TextField (null=False, blank=False)
+    - basic_content: TextField (null=True, blank=True)
+    - intermediate_content: TextField (null=True, blank=True)
+    - access_level: CharField (null=False, blank=False, max_length=20, choices=['basic', 'intermediate', 'advanced'])
+    - duration: CharField (null=True, blank=True, max_length=50)
+    - type: CharField (null=False, blank=False, max_length=20, choices=['video', 'reading', 'interactive', 'quiz', 'lab'])
+    - order: PositiveIntegerField (null=False, blank=False)
+    - has_assessment: BooleanField (null=False, blank=False)
+    - has_lab: BooleanField (null=False, blank=False)
+    - is_free_preview: BooleanField (null=False, blank=False)
+
+  Model: Resource
+    - id: BigAutoField (null=False, blank=True)
+    - lesson: ForeignKey -> Lesson (null=False, blank=False)
+    - title: CharField (null=False, blank=False, max_length=255)
+    - type: CharField (null=False, blank=False, max_length=20, choices=['document', 'video', 'link', 'code', 'tool'])
+    - file: FileField (null=True, blank=True, max_length=100)
+    - url: URLField (null=True, blank=True, max_length=200)
+    - description: TextField (null=True, blank=True)
+    - premium: BooleanField (null=False, blank=False)
+
+  Model: Assessment
+    - questions: ManyToOneRel -> Question (null=True)
+    - attempts: ManyToOneRel -> AssessmentAttempt (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - lesson: OneToOneField -> Lesson (null=False, blank=False)
+    - title: CharField (null=False, blank=False, max_length=255)
+    - description: TextField (null=True, blank=True)
+    - time_limit: PositiveIntegerField (null=False, blank=False)
+    - passing_score: PositiveIntegerField (null=False, blank=False)
+
+  Model: Question
+    - answers: ManyToOneRel -> Answer (null=True)
+    - attemptanswer: ManyToOneRel -> AttemptAnswer (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - assessment: ForeignKey -> Assessment (null=False, blank=False)
+    - question_text: TextField (null=False, blank=False)
+    - question_type: CharField (null=False, blank=False, max_length=20, choices=['multiple_choice', 'true_false', 'short_answer', 'matching'])
+    - order: PositiveIntegerField (null=False, blank=False)
+    - points: PositiveIntegerField (null=False, blank=False)
+
+  Model: Answer
+    - attemptanswer: ManyToOneRel -> AttemptAnswer (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - question: ForeignKey -> Question (null=False, blank=False)
+    - answer_text: CharField (null=False, blank=False, max_length=255)
+    - is_correct: BooleanField (null=False, blank=False)
+    - explanation: TextField (null=True, blank=True)
+
+  Model: Enrollment
+    - progress: ManyToOneRel -> Progress (null=True)
+    - certificate: OneToOneRel -> Certificate (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - course: ForeignKey -> Course (null=False, blank=False)
+    - enrolled_date: DateTimeField (null=False, blank=True)
+    - last_accessed: DateTimeField (null=False, blank=True)
+    - status: CharField (null=False, blank=False, max_length=20, choices=['active', 'completed', 'dropped'])
+    - completion_date: DateTimeField (null=True, blank=True)
+
+  Model: Progress
+    - id: BigAutoField (null=False, blank=True)
+    - enrollment: ForeignKey -> Enrollment (null=False, blank=False)
+    - lesson: ForeignKey -> Lesson (null=False, blank=False)
+    - is_completed: BooleanField (null=False, blank=False)
+    - completed_date: DateTimeField (null=True, blank=True)
+    - time_spent: PositiveIntegerField (null=False, blank=False)
+
+  Model: AssessmentAttempt
+    - answers: ManyToOneRel -> AttemptAnswer (null=True)
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - assessment: ForeignKey -> Assessment (null=False, blank=False)
+    - start_time: DateTimeField (null=False, blank=True)
+    - end_time: DateTimeField (null=True, blank=True)
+    - score: PositiveIntegerField (null=False, blank=False)
+    - passed: BooleanField (null=False, blank=False)
+
+  Model: AttemptAnswer
+    - id: BigAutoField (null=False, blank=True)
+    - attempt: ForeignKey -> AssessmentAttempt (null=False, blank=False)
+    - question: ForeignKey -> Question (null=False, blank=False)
+    - selected_answer: ForeignKey -> Answer (null=True, blank=True)
+    - text_answer: TextField (null=True, blank=True)
+    - is_correct: BooleanField (null=False, blank=False)
+    - points_earned: PositiveIntegerField (null=False, blank=False)
+
+  Model: Review
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - course: ForeignKey -> Course (null=False, blank=False)
+    - rating: PositiveSmallIntegerField (null=False, blank=False)
+    - title: CharField (null=True, blank=True, max_length=255)
+    - content: TextField (null=False, blank=False)
+    - date_created: DateTimeField (null=False, blank=True)
+    - helpful_count: PositiveIntegerField (null=False, blank=False)
+
+  Model: Note
+    - id: BigAutoField (null=False, blank=True)
+    - user: ForeignKey -> CustomUser (null=False, blank=False)
+    - lesson: ForeignKey -> Lesson (null=False, blank=False)
+    - content: TextField (null=False, blank=False)
+    - created_date: DateTimeField (null=False, blank=True)
+    - updated_date: DateTimeField (null=False, blank=True)
+
+  Model: Certificate
+    - id: BigAutoField (null=False, blank=True)
+    - enrollment: OneToOneField -> Enrollment (null=False, blank=False)
+    - issue_date: DateTimeField (null=False, blank=True)
+    - certificate_number: CharField (null=False, blank=False, max_length=50)
+
+================================================================================
+VIEWS
+================================================================================
+
+App: admin
+----------------------------------------
+
+App: auth
+----------------------------------------
+
+  View: FormView
+    - HTTP Method: GET
+    - HTTP Method: POST
+    - HTTP Method: PUT
+
+  View: LoginView
+    - HTTP Method: GET
+    - HTTP Method: POST
+    - HTTP Method: PUT
+
+  View: LogoutView
+    - HTTP Method: GET
+    - HTTP Method: POST
+
+  View: PasswordChangeDoneView
+    - HTTP Method: GET
+
+  View: PasswordChangeView
+    - HTTP Method: GET
+    - HTTP Method: POST
+    - HTTP Method: PUT
+
+  View: PasswordResetCompleteView
+    - HTTP Method: GET
+
+  View: PasswordResetConfirmView
+    - HTTP Method: GET
+    - HTTP Method: POST
+    - HTTP Method: PUT
+
+  View: PasswordResetDoneView
+    - HTTP Method: GET
+
+  View: PasswordResetView
+    - HTTP Method: GET
+    - HTTP Method: POST
+    - HTTP Method: PUT
+
+  View: TemplateView
+    - HTTP Method: GET
+
+App: contenttypes
+----------------------------------------
+
+App: messages
+----------------------------------------
+
+App: staticfiles
+----------------------------------------
+
+App: rest_framework
+----------------------------------------
+
+  View: APIView
+
+  View: View
+
+App: rest_framework_simplejwt
+----------------------------------------
+
+  View: TokenBlacklistView
+    - HTTP Method: POST
+
+  View: TokenObtainPairView
+    - HTTP Method: POST
+
+  View: TokenObtainSlidingView
+    - HTTP Method: POST
+
+  View: TokenRefreshSlidingView
+    - HTTP Method: POST
+
+  View: TokenRefreshView
+    - HTTP Method: POST
+
+  View: TokenVerifyView
+    - HTTP Method: POST
+
+  View: TokenViewBase
+    - HTTP Method: POST
+
+App: users
+----------------------------------------
+
+  View: EmailVerificationView
+    - HTTP Method: POST
+    - Serializer: EmailVerificationSerializer
+
+  View: LoginView
+    - HTTP Method: POST
+    - Serializer: LoginSerializer
+
+  View: LogoutView
+    - HTTP Method: POST
+
+  View: PasswordChangeView
+    - HTTP Method: POST
+    - Serializer: PasswordChangeSerializer
+
+  View: PasswordResetConfirmView
+    - HTTP Method: POST
+    - Serializer: PasswordResetConfirmSerializer
+
+  View: PasswordResetRequestView
+    - HTTP Method: POST
+    - Serializer: PasswordResetRequestSerializer
+
+  View: ProfileView
+    - HTTP Method: GET
+    - HTTP Method: PUT
+    - HTTP Method: PATCH
+    - Serializer: ProfileSerializer
+
+  View: RegisterView
+    - HTTP Method: POST
+    - Queryset Model: CustomUser
+    - Serializer: UserCreateSerializer
+
+  View: ResendVerificationView
+    - HTTP Method: POST
+
+  View: SubscriptionViewSet
+    - Serializer: SubscriptionSerializer
+
+  View: UpdateProfileView
+    - HTTP Method: PUT
+    - Serializer: UpdateProfileSerializer
+
+  View: UserSessionViewSet
+    - Serializer: UserDetailSerializer
+
+  View: UserView
+    - HTTP Method: GET
+    - HTTP Method: PUT
+    - HTTP Method: PATCH
+    - Serializer: UserDetailSerializer
+
+App: courses
+----------------------------------------
+
+  View: AssessmentDetailView
+    - HTTP Method: GET
+    - Queryset Model: Assessment
+    - Serializer: AssessmentSerializer
+
+  View: CategoryViewSet
+    - Queryset Model: Category
+    - Serializer: CategorySerializer
+
+  View: CertificateViewSet
+    - Serializer: CertificateSerializer
+
+  View: CompleteLesson
+    - HTTP Method: PUT
+    - HTTP Method: PATCH
+
+  View: CourseViewSet
+    - Queryset Model: Course
+
+  View: EnrollmentViewSet
+    - Serializer: EnrollmentSerializer
+
+  View: LessonDetailView
+    - HTTP Method: GET
+    - Queryset Model: Lesson
+    - Serializer: LessonSerializer
+
+  View: LessonViewSet
+    - Queryset Model: Lesson
+    - Serializer: LessonSerializer
+
+  View: ModuleViewSet
+    - Queryset Model: Module
+
+  View: NoteViewSet
+    - Serializer: NoteSerializer
+
+  View: StartAssessment
+    - HTTP Method: POST
+    - Serializer: AssessmentAttemptSerializer
+
+  View: SubmitAssessment
+    - HTTP Method: PUT
+    - HTTP Method: PATCH
+
+  View: UserEnrollmentsView
+    - HTTP Method: GET
+    - Serializer: EnrollmentSerializer
+
+  View: UserProgressView
+    - HTTP Method: GET
+    - Serializer: ProgressSerializer
+
+================================================================================
+SERIALIZERS
+================================================================================
+
+App: sessions
+----------------------------------------
+
+App: rest_framework
+----------------------------------------
+
+App: rest_framework_simplejwt
+----------------------------------------
+
+  Serializer: AbstractBaseUser
+
+  Serializer: BlacklistedToken
+
+App: users
+----------------------------------------
+
+  Serializer: ProfileSerializer
+    - Model: Profile
+    - Excluded: user, created_at, updated_at
+
+  Serializer: SubscriptionSerializer
+    - Model: Subscription
+    - Fields: tier, status, start_date, end_date, is_auto_renew, last_payment_date, is_active, days_remaining
+
+  Serializer: UpdateProfileSerializer
+    - Model: CustomUser
+    - Fields: first_name, last_name, profile
+
+  Serializer: User
+
+  Serializer: UserCreateSerializer
+    - Model: CustomUser
+    - Fields: email, username, password, password_confirm, first_name, last_name, role
+
+  Serializer: UserDetailSerializer
+    - Model: CustomUser
+    - Fields: id, email, username, first_name, last_name, role, is_email_verified, date_joined, last_login, profile, subscription
+
+  Serializer: UserSerializer
+    - Model: CustomUser
+    - Fields: id, email, username, first_name, last_name, role, is_email_verified, date_joined, last_login, profile, subscription
+
+  Serializer: UserSessionSerializer
+    - Model: UserSession
+    - Fields: id, session_key, ip_address, user_agent, created_at, expires_at, last_activity, is_active, device_type, location
+
+App: courses
+----------------------------------------
+
+  Serializer: AnswerSerializer
+    - Model: Answer
+    - Fields: id, answer_text
+
+  Serializer: AssessmentAttemptSerializer
+    - Model: AssessmentAttempt
+    - Fields: id, assessment, start_time, end_time, score, passed, score_percentage
+
+  Serializer: AssessmentSerializer
+    - Model: Assessment
+    - Fields: id, title, description, time_limit, passing_score, questions
+
+  Serializer: CategorySerializer
+    - Model: Category
+    - Fields: id, name, description, icon, slug
+
+  Serializer: CertificateSerializer
+    - Model: Certificate
+    - Fields: id, enrollment, issue_date, certificate_number, course, user
+
+  Serializer: CourseDetailSerializer
+    - Model: Course
+    - Fields: id, title, subtitle, slug, description, category, category_id, thumbnail, price, discount_price, discount_ends, level, duration, has_certificate, is_featured, published_date, updated_date, instructors, rating, enrolled_students, is_enrolled, modules, user_progress, requirements, skills
+
+  Serializer: CourseInstructorSerializer
+    - Model: Module
+    - Fields: instructor, title, bio, is_lead
+
+  Serializer: CourseSerializer
+    - Model: Course
+    - Fields: id, title, subtitle, slug, description, category, category_id, thumbnail, price, discount_price, discount_ends, level, duration, has_certificate, is_featured, published_date, updated_date, instructors, rating, enrolled_students, is_enrolled
+
+  Serializer: EnrollmentSerializer
+    - Model: Enrollment
+    - Fields: id, course, course_id, enrolled_date, last_accessed, status, completion_date
+
+  Serializer: LessonSerializer
+    - Model: Lesson
+    - Fields: id, title, content, access_level, duration, type, order, has_assessment, has_lab, is_free_preview, resources, premium_resources, is_completed
+
+  Serializer: ModuleDetailSerializer
+    - Model: Module
+    - Fields: id, title, description, order, duration, lessons
+
+  Serializer: ModuleSerializer
+    - Model: Module
+    - Fields: id, title, description, order, duration
+
+  Serializer: NoteSerializer
+    - Model: Note
+    - Fields: id, lesson, content, created_date, updated_date
+
+  Serializer: ProgressSerializer
+    - Model: Progress
+    - Fields: id, lesson, is_completed, completed_date, time_spent
+
+  Serializer: QuestionDetailSerializer
+    - Model: Question
+    - Fields: id, question_text, question_type, order, points, answers
+
+  Serializer: QuestionSerializer
+    - Model: Question
+    - Fields: id, question_text, question_type, order, answers
+
+  Serializer: ResourceSerializer
+    - Model: Resource
+    - Fields: id, title, type, file, url, description, premium
+
+  Serializer: ReviewSerializer
+    - Model: Review
+    - Fields: id, user, rating, title, content, date_created, helpful_count
+
+  Serializer: User
+
+================================================================================
+URLs
+================================================================================
+
+URL Patterns:
+----------------------------------------
+  ^media/(?P<path>.*)$ -> serve
+  admin/ -> index
+  admin/(?P<url>.*)$ -> catch_all_view
+  admin/^(?P<app_label>auth|users|courses)/$ -> app_index
+  admin/auth/group/ -> changelist_view
+  admin/auth/group/<path:object_id>/ -> view
+  admin/auth/group/<path:object_id>/change/ -> change_view
+  admin/auth/group/<path:object_id>/delete/ -> delete_view
+  admin/auth/group/<path:object_id>/history/ -> history_view
+  admin/auth/group/add/ -> add_view
+  admin/autocomplete/ -> autocomplete_view
+  admin/courses/answer/ -> changelist_view
+  admin/courses/answer/<path:object_id>/ -> view
+  admin/courses/answer/<path:object_id>/change/ -> change_view
+  admin/courses/answer/<path:object_id>/delete/ -> delete_view
+  admin/courses/answer/<path:object_id>/history/ -> history_view
+  admin/courses/answer/add/ -> add_view
+  admin/courses/assessment/ -> changelist_view
+  admin/courses/assessment/<path:object_id>/ -> view
+  admin/courses/assessment/<path:object_id>/change/ -> change_view
+  admin/courses/assessment/<path:object_id>/delete/ -> delete_view
+  admin/courses/assessment/<path:object_id>/history/ -> history_view
+  admin/courses/assessment/add/ -> add_view
+  admin/courses/assessmentattempt/ -> changelist_view
+  admin/courses/assessmentattempt/<path:object_id>/ -> view
+  admin/courses/assessmentattempt/<path:object_id>/change/ -> change_view
+  admin/courses/assessmentattempt/<path:object_id>/delete/ -> delete_view
+  admin/courses/assessmentattempt/<path:object_id>/history/ -> history_view
+  admin/courses/assessmentattempt/add/ -> add_view
+  admin/courses/attemptanswer/ -> changelist_view
+  admin/courses/attemptanswer/<path:object_id>/ -> view
+  admin/courses/attemptanswer/<path:object_id>/change/ -> change_view
+  admin/courses/attemptanswer/<path:object_id>/delete/ -> delete_view
+  admin/courses/attemptanswer/<path:object_id>/history/ -> history_view
+  admin/courses/attemptanswer/add/ -> add_view
+  admin/courses/category/ -> changelist_view
+  admin/courses/category/<path:object_id>/ -> view
+  admin/courses/category/<path:object_id>/change/ -> change_view
+  admin/courses/category/<path:object_id>/delete/ -> delete_view
+  admin/courses/category/<path:object_id>/history/ -> history_view
+  admin/courses/category/add/ -> add_view
+  admin/courses/certificate/ -> changelist_view
+  admin/courses/certificate/<path:object_id>/ -> view
+  admin/courses/certificate/<path:object_id>/change/ -> change_view
+  admin/courses/certificate/<path:object_id>/delete/ -> delete_view
+  admin/courses/certificate/<path:object_id>/history/ -> history_view
+  admin/courses/certificate/add/ -> add_view
+  admin/courses/course/ -> changelist_view
+  admin/courses/course/<path:object_id>/ -> view
+  admin/courses/course/<path:object_id>/change/ -> change_view
+  admin/courses/course/<path:object_id>/delete/ -> delete_view
+  admin/courses/course/<path:object_id>/history/ -> history_view
+  admin/courses/course/add/ -> add_view
+  admin/courses/courseinstructor/ -> changelist_view
+  admin/courses/courseinstructor/<path:object_id>/ -> view
+  admin/courses/courseinstructor/<path:object_id>/change/ -> change_view
+  admin/courses/courseinstructor/<path:object_id>/delete/ -> delete_view
+  admin/courses/courseinstructor/<path:object_id>/history/ -> history_view
+  admin/courses/courseinstructor/add/ -> add_view
+  admin/courses/enrollment/ -> changelist_view
+  admin/courses/enrollment/<path:object_id>/ -> view
+  admin/courses/enrollment/<path:object_id>/change/ -> change_view
+  admin/courses/enrollment/<path:object_id>/delete/ -> delete_view
+  admin/courses/enrollment/<path:object_id>/history/ -> history_view
+  admin/courses/enrollment/add/ -> add_view
+  admin/courses/lesson/ -> changelist_view
+  admin/courses/lesson/<path:object_id>/ -> view
+  admin/courses/lesson/<path:object_id>/change/ -> change_view
+  admin/courses/lesson/<path:object_id>/delete/ -> delete_view
+  admin/courses/lesson/<path:object_id>/history/ -> history_view
+  admin/courses/lesson/add/ -> add_view
+  admin/courses/module/ -> changelist_view
+  admin/courses/module/<path:object_id>/ -> view
+  admin/courses/module/<path:object_id>/change/ -> change_view
+  admin/courses/module/<path:object_id>/delete/ -> delete_view
+  admin/courses/module/<path:object_id>/history/ -> history_view
+  admin/courses/module/add/ -> add_view
+  admin/courses/note/ -> changelist_view
+  admin/courses/note/<path:object_id>/ -> view
+  admin/courses/note/<path:object_id>/change/ -> change_view
+  admin/courses/note/<path:object_id>/delete/ -> delete_view
+  admin/courses/note/<path:object_id>/history/ -> history_view
+  admin/courses/note/add/ -> add_view
+  admin/courses/progress/ -> changelist_view
+  admin/courses/progress/<path:object_id>/ -> view
+  admin/courses/progress/<path:object_id>/change/ -> change_view
+  admin/courses/progress/<path:object_id>/delete/ -> delete_view
+  admin/courses/progress/<path:object_id>/history/ -> history_view
+  admin/courses/progress/add/ -> add_view
+  admin/courses/question/ -> changelist_view
+  admin/courses/question/<path:object_id>/ -> view
+  admin/courses/question/<path:object_id>/change/ -> change_view
+  admin/courses/question/<path:object_id>/delete/ -> delete_view
+  admin/courses/question/<path:object_id>/history/ -> history_view
+  admin/courses/question/add/ -> add_view
+  admin/courses/resource/ -> changelist_view
+  admin/courses/resource/<path:object_id>/ -> view
+  admin/courses/resource/<path:object_id>/change/ -> change_view
+  admin/courses/resource/<path:object_id>/delete/ -> delete_view
+  admin/courses/resource/<path:object_id>/history/ -> history_view
+  admin/courses/resource/add/ -> add_view
+  admin/courses/review/ -> changelist_view
+  admin/courses/review/<path:object_id>/ -> view
+  admin/courses/review/<path:object_id>/change/ -> change_view
+  admin/courses/review/<path:object_id>/delete/ -> delete_view
+  admin/courses/review/<path:object_id>/history/ -> history_view
+  admin/courses/review/add/ -> add_view
+  admin/jsi18n/ -> i18n_javascript
+  admin/login/ -> login
+  admin/logout/ -> logout
+  admin/password_change/ -> password_change
+  admin/password_change/done/ -> password_change_done
+  admin/r/<path:content_type_id>/<path:object_id>/ -> shortcut
+  admin/users/customuser/ -> changelist_view
+  admin/users/customuser/<id>/password/ -> user_change_password
+  admin/users/customuser/<path:object_id>/ -> view
+  admin/users/customuser/<path:object_id>/change/ -> change_view
+  admin/users/customuser/<path:object_id>/delete/ -> delete_view
+  admin/users/customuser/<path:object_id>/history/ -> history_view
+  admin/users/customuser/add/ -> add_view
+  admin/users/emailverification/ -> changelist_view
+  admin/users/emailverification/<path:object_id>/ -> view
+  admin/users/emailverification/<path:object_id>/change/ -> change_view
+  admin/users/emailverification/<path:object_id>/delete/ -> delete_view
+  admin/users/emailverification/<path:object_id>/history/ -> history_view
+  admin/users/emailverification/add/ -> add_view
+  admin/users/loginlog/ -> changelist_view
+  admin/users/loginlog/<path:object_id>/ -> view
+  admin/users/loginlog/<path:object_id>/change/ -> change_view
+  admin/users/loginlog/<path:object_id>/delete/ -> delete_view
+  admin/users/loginlog/<path:object_id>/history/ -> history_view
+  admin/users/loginlog/add/ -> add_view
+  admin/users/passwordreset/ -> changelist_view
+  admin/users/passwordreset/<path:object_id>/ -> view
+  admin/users/passwordreset/<path:object_id>/change/ -> change_view
+  admin/users/passwordreset/<path:object_id>/delete/ -> delete_view
+  admin/users/passwordreset/<path:object_id>/history/ -> history_view
+  admin/users/passwordreset/add/ -> add_view
+  admin/users/usersession/ -> changelist_view
+  admin/users/usersession/<path:object_id>/ -> view
+  admin/users/usersession/<path:object_id>/change/ -> change_view
+  admin/users/usersession/<path:object_id>/delete/ -> delete_view
+  admin/users/usersession/<path:object_id>/history/ -> history_view
+  admin/users/usersession/add/ -> add_view
+  api-auth/login/ -> view
+  api-auth/logout/ -> view
+  api/ -> view
+  api/<drf_format_suffix:format> -> view
+  api/^categories/$ -> CategoryViewSet
+  api/^categories/(?P<slug>[^/.]+)/$ -> CategoryViewSet
+  api/^categories/(?P<slug>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> CategoryViewSet
+  api/^categories\.(?P<format>[a-z0-9]+)/?$ -> CategoryViewSet
+  api/^courses/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/enroll/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/enroll\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/modules/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/modules\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/review/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/review\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/reviews/$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)/reviews\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^courses/(?P<slug>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^courses\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+  api/^enrollments/$ -> EnrollmentViewSet
+  api/^enrollments/(?P<pk>[^/.]+)/$ -> EnrollmentViewSet
+  api/^enrollments/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> EnrollmentViewSet
+  api/^enrollments\.(?P<format>[a-z0-9]+)/?$ -> EnrollmentViewSet
+  api/^lessons/$ -> LessonViewSet
+  api/^lessons/(?P<pk>[^/.]+)/$ -> LessonViewSet
+  api/^lessons/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> LessonViewSet
+  api/^lessons\.(?P<format>[a-z0-9]+)/?$ -> LessonViewSet
+  api/^modules/$ -> ModuleViewSet
+  api/^modules/(?P<pk>[^/.]+)/$ -> ModuleViewSet
+  api/^modules/(?P<pk>[^/.]+)/lessons/$ -> ModuleViewSet
+  api/^modules/(?P<pk>[^/.]+)/lessons\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+  api/^modules/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+  api/^modules\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+  api/system/db-stats/ -> view
+  api/system/db-status/ -> view
+  api/token/ -> view
+  api/token/refresh/ -> view
+  api/user/ -> view
+  api/user/<drf_format_suffix:format> -> view
+  api/user/^sessions/$ -> UserSessionViewSet
+  api/user/^sessions/(?P<pk>[^/.]+)/$ -> UserSessionViewSet
+  api/user/^sessions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> UserSessionViewSet
+  api/user/^sessions\.(?P<format>[a-z0-9]+)/?$ -> UserSessionViewSet
+  api/user/email/verify/ -> view
+  api/user/email/verify/resend/ -> view
+  api/user/login/ -> view
+  api/user/logout/ -> view
+  api/user/me/ -> view
+  api/user/password/change/ -> view
+  api/user/password/reset/ -> view
+  api/user/password/reset/confirm/ -> view
+  api/user/profile/ -> view
+  api/user/register/ -> view
+  api/user/token/refresh/ -> view
+
+================================================================================
+CONSISTENCY CHECK
+================================================================================
+
+Consistency Check:
+----------------------------------------
+Warning: Field 'is_active' in serializer 'SubscriptionSerializer' not found in model 'Subscription'
+Warning: Field 'days_remaining' in serializer 'SubscriptionSerializer' not found in model 'Subscription'
+Checked serializer 'SubscriptionSerializer' against model 'Subscription'
+Checked serializer 'UserSessionSerializer' against model 'UserSession'
+Checked serializer 'AnswerSerializer' against model 'Answer'
+Warning: Field 'score_percentage' in serializer 'AssessmentAttemptSerializer' not found in model 'AssessmentAttempt'
+Checked serializer 'AssessmentAttemptSerializer' against model 'AssessmentAttempt'
+Checked serializer 'AssessmentSerializer' against model 'Assessment'
+Checked serializer 'CategorySerializer' against model 'Category'
+Warning: Field 'course' in serializer 'CertificateSerializer' not found in model 'Certificate'
+Warning: Field 'user' in serializer 'CertificateSerializer' not found in model 'Certificate'
+Checked serializer 'CertificateSerializer' against model 'Certificate'
+Checked serializer 'CourseInstructorSerializer' against model 'CourseInstructor'
+Warning: Field 'category_id' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'rating' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'enrolled_students' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'is_enrolled' in serializer 'CourseSerializer' not found in model 'Course'
+Checked serializer 'CourseSerializer' against model 'Course'
+Warning: Field 'course_id' in serializer 'EnrollmentSerializer' not found in model 'Enrollment'
+Checked serializer 'EnrollmentSerializer' against model 'Enrollment'
+Warning: Field 'premium_resources' in serializer 'LessonSerializer' not found in model 'Lesson'
+Warning: Field 'is_completed' in serializer 'LessonSerializer' not found in model 'Lesson'
+Checked serializer 'LessonSerializer' against model 'Lesson'
+Checked serializer 'ModuleSerializer' against model 'Module'
+Checked serializer 'NoteSerializer' against model 'Note'
+Checked serializer 'ProgressSerializer' against model 'Progress'
+Checked serializer 'QuestionSerializer' against model 'Question'
+Checked serializer 'ResourceSerializer' against model 'Resource'
+Checked serializer 'ReviewSerializer' against model 'Review'
+
+================================================================================
+FRONTEND-BACKEND CONNECTIONS
+================================================================================
+
+Potential Frontend-Backend API Connections:
+----------------------------------------
+
+Frontend components likely need to connect to these API endpoints:
+
+  Resource: Admin
+    - admin/ -> index
+    Frontend components that might use this:
+      * AdminList.js or AdminList.vue (for listings)
+      * AdminDetail.js or AdminDetail.vue (for details)
+      * AdminForm.js or AdminForm.vue (for creating/editing)
+
+  Resource: Login
+    - admin/login/ -> login
+    - api/user/login/ -> view
+    - api-auth/login/ -> view
+    Frontend components that might use this:
+      * LoginList.js or LoginList.vue (for listings)
+      * LoginDetail.js or LoginDetail.vue (for details)
+      * LoginForm.js or LoginForm.vue (for creating/editing)
+
+  Resource: Logout
+    - admin/logout/ -> logout
+    - api/user/logout/ -> view
+    - api-auth/logout/ -> view
+    Frontend components that might use this:
+      * LogoutList.js or LogoutList.vue (for listings)
+      * LogoutDetail.js or LogoutDetail.vue (for details)
+      * LogoutForm.js or LogoutForm.vue (for creating/editing)
+
+  Resource: Password_change
+    - admin/password_change/ -> password_change
+    Frontend components that might use this:
+      * Password_changeList.js or Password_changeList.vue (for listings)
+      * Password_changeDetail.js or Password_changeDetail.vue (for details)
+      * Password_changeForm.js or Password_changeForm.vue (for creating/editing)
+
+  Resource: Done
+    - admin/password_change/done/ -> password_change_done
+    Frontend components that might use this:
+      * DoneList.js or DoneList.vue (for listings)
+      * DoneDetail.js or DoneDetail.vue (for details)
+      * DoneForm.js or DoneForm.vue (for creating/editing)
+
+  Resource: Autocomplete
+    - admin/autocomplete/ -> autocomplete_view
+    Frontend components that might use this:
+      * AutocompleteList.js or AutocompleteList.vue (for listings)
+      * AutocompleteDetail.js or AutocompleteDetail.vue (for details)
+      * AutocompleteForm.js or AutocompleteForm.vue (for creating/editing)
+
+  Resource: Jsi18n
+    - admin/jsi18n/ -> i18n_javascript
+    Frontend components that might use this:
+      * Jsi18nList.js or Jsi18nList.vue (for listings)
+      * Jsi18nDetail.js or Jsi18nDetail.vue (for details)
+      * Jsi18nForm.js or Jsi18nForm.vue (for creating/editing)
+
+  Resource: <path:object_id>
+    - admin/r/<path:content_type_id>/<path:object_id>/ -> shortcut
+    - admin/auth/group/<path:object_id>/ -> view
+    - admin/users/customuser/<path:object_id>/ -> view
+    - admin/users/emailverification/<path:object_id>/ -> view
+    - admin/users/passwordreset/<path:object_id>/ -> view
+    - admin/users/loginlog/<path:object_id>/ -> view
+    - admin/users/usersession/<path:object_id>/ -> view
+    - admin/courses/course/<path:object_id>/ -> view
+    - admin/courses/module/<path:object_id>/ -> view
+    - admin/courses/lesson/<path:object_id>/ -> view
+    - admin/courses/question/<path:object_id>/ -> view
+    - admin/courses/enrollment/<path:object_id>/ -> view
+    - admin/courses/progress/<path:object_id>/ -> view
+    - admin/courses/assessmentattempt/<path:object_id>/ -> view
+    - admin/courses/review/<path:object_id>/ -> view
+    - admin/courses/certificate/<path:object_id>/ -> view
+    - admin/courses/category/<path:object_id>/ -> view
+    - admin/courses/resource/<path:object_id>/ -> view
+    - admin/courses/answer/<path:object_id>/ -> view
+    - admin/courses/attemptanswer/<path:object_id>/ -> view
+    - admin/courses/note/<path:object_id>/ -> view
+    - admin/courses/assessment/<path:object_id>/ -> view
+    - admin/courses/courseinstructor/<path:object_id>/ -> view
+    Frontend components that might use this:
+      * <path:object_id>List.js or <path:object_id>List.vue (for listings)
+      * <path:object_id>Detail.js or <path:object_id>Detail.vue (for details)
+      * <path:object_id>Form.js or <path:object_id>Form.vue (for creating/editing)
+
+  Resource: Group
+    - admin/auth/group/ -> changelist_view
+    Frontend components that might use this:
+      * GroupList.js or GroupList.vue (for listings)
+      * GroupDetail.js or GroupDetail.vue (for details)
+      * GroupForm.js or GroupForm.vue (for creating/editing)
+
+  Resource: Add
+    - admin/auth/group/add/ -> add_view
+    - admin/users/customuser/add/ -> add_view
+    - admin/users/emailverification/add/ -> add_view
+    - admin/users/passwordreset/add/ -> add_view
+    - admin/users/loginlog/add/ -> add_view
+    - admin/users/usersession/add/ -> add_view
+    - admin/courses/course/add/ -> add_view
+    - admin/courses/module/add/ -> add_view
+    - admin/courses/lesson/add/ -> add_view
+    - admin/courses/question/add/ -> add_view
+    - admin/courses/enrollment/add/ -> add_view
+    - admin/courses/progress/add/ -> add_view
+    - admin/courses/assessmentattempt/add/ -> add_view
+    - admin/courses/review/add/ -> add_view
+    - admin/courses/certificate/add/ -> add_view
+    - admin/courses/category/add/ -> add_view
+    - admin/courses/resource/add/ -> add_view
+    - admin/courses/answer/add/ -> add_view
+    - admin/courses/attemptanswer/add/ -> add_view
+    - admin/courses/note/add/ -> add_view
+    - admin/courses/assessment/add/ -> add_view
+    - admin/courses/courseinstructor/add/ -> add_view
+    Frontend components that might use this:
+      * AddList.js or AddList.vue (for listings)
+      * AddDetail.js or AddDetail.vue (for details)
+      * AddForm.js or AddForm.vue (for creating/editing)
+
+  Resource: History
+    - admin/auth/group/<path:object_id>/history/ -> history_view
+    - admin/users/customuser/<path:object_id>/history/ -> history_view
+    - admin/users/emailverification/<path:object_id>/history/ -> history_view
+    - admin/users/passwordreset/<path:object_id>/history/ -> history_view
+    - admin/users/loginlog/<path:object_id>/history/ -> history_view
+    - admin/users/usersession/<path:object_id>/history/ -> history_view
+    - admin/courses/course/<path:object_id>/history/ -> history_view
+    - admin/courses/module/<path:object_id>/history/ -> history_view
+    - admin/courses/lesson/<path:object_id>/history/ -> history_view
+    - admin/courses/question/<path:object_id>/history/ -> history_view
+    - admin/courses/enrollment/<path:object_id>/history/ -> history_view
+    - admin/courses/progress/<path:object_id>/history/ -> history_view
+    - admin/courses/assessmentattempt/<path:object_id>/history/ -> history_view
+    - admin/courses/review/<path:object_id>/history/ -> history_view
+    - admin/courses/certificate/<path:object_id>/history/ -> history_view
+    - admin/courses/category/<path:object_id>/history/ -> history_view
+    - admin/courses/resource/<path:object_id>/history/ -> history_view
+    - admin/courses/answer/<path:object_id>/history/ -> history_view
+    - admin/courses/attemptanswer/<path:object_id>/history/ -> history_view
+    - admin/courses/note/<path:object_id>/history/ -> history_view
+    - admin/courses/assessment/<path:object_id>/history/ -> history_view
+    - admin/courses/courseinstructor/<path:object_id>/history/ -> history_view
+    Frontend components that might use this:
+      * HistoryList.js or HistoryList.vue (for listings)
+      * HistoryDetail.js or HistoryDetail.vue (for details)
+      * HistoryForm.js or HistoryForm.vue (for creating/editing)
+
+  Resource: Delete
+    - admin/auth/group/<path:object_id>/delete/ -> delete_view
+    - admin/users/customuser/<path:object_id>/delete/ -> delete_view
+    - admin/users/emailverification/<path:object_id>/delete/ -> delete_view
+    - admin/users/passwordreset/<path:object_id>/delete/ -> delete_view
+    - admin/users/loginlog/<path:object_id>/delete/ -> delete_view
+    - admin/users/usersession/<path:object_id>/delete/ -> delete_view
+    - admin/courses/course/<path:object_id>/delete/ -> delete_view
+    - admin/courses/module/<path:object_id>/delete/ -> delete_view
+    - admin/courses/lesson/<path:object_id>/delete/ -> delete_view
+    - admin/courses/question/<path:object_id>/delete/ -> delete_view
+    - admin/courses/enrollment/<path:object_id>/delete/ -> delete_view
+    - admin/courses/progress/<path:object_id>/delete/ -> delete_view
+    - admin/courses/assessmentattempt/<path:object_id>/delete/ -> delete_view
+    - admin/courses/review/<path:object_id>/delete/ -> delete_view
+    - admin/courses/certificate/<path:object_id>/delete/ -> delete_view
+    - admin/courses/category/<path:object_id>/delete/ -> delete_view
+    - admin/courses/resource/<path:object_id>/delete/ -> delete_view
+    - admin/courses/answer/<path:object_id>/delete/ -> delete_view
+    - admin/courses/attemptanswer/<path:object_id>/delete/ -> delete_view
+    - admin/courses/note/<path:object_id>/delete/ -> delete_view
+    - admin/courses/assessment/<path:object_id>/delete/ -> delete_view
+    - admin/courses/courseinstructor/<path:object_id>/delete/ -> delete_view
+    Frontend components that might use this:
+      * DeleteList.js or DeleteList.vue (for listings)
+      * DeleteDetail.js or DeleteDetail.vue (for details)
+      * DeleteForm.js or DeleteForm.vue (for creating/editing)
+
+  Resource: Change
+    - admin/auth/group/<path:object_id>/change/ -> change_view
+    - admin/users/customuser/<path:object_id>/change/ -> change_view
+    - admin/users/emailverification/<path:object_id>/change/ -> change_view
+    - admin/users/passwordreset/<path:object_id>/change/ -> change_view
+    - admin/users/loginlog/<path:object_id>/change/ -> change_view
+    - admin/users/usersession/<path:object_id>/change/ -> change_view
+    - admin/courses/course/<path:object_id>/change/ -> change_view
+    - admin/courses/module/<path:object_id>/change/ -> change_view
+    - admin/courses/lesson/<path:object_id>/change/ -> change_view
+    - admin/courses/question/<path:object_id>/change/ -> change_view
+    - admin/courses/enrollment/<path:object_id>/change/ -> change_view
+    - admin/courses/progress/<path:object_id>/change/ -> change_view
+    - admin/courses/assessmentattempt/<path:object_id>/change/ -> change_view
+    - admin/courses/review/<path:object_id>/change/ -> change_view
+    - admin/courses/certificate/<path:object_id>/change/ -> change_view
+    - admin/courses/category/<path:object_id>/change/ -> change_view
+    - admin/courses/resource/<path:object_id>/change/ -> change_view
+    - admin/courses/answer/<path:object_id>/change/ -> change_view
+    - admin/courses/attemptanswer/<path:object_id>/change/ -> change_view
+    - admin/courses/note/<path:object_id>/change/ -> change_view
+    - admin/courses/assessment/<path:object_id>/change/ -> change_view
+    - admin/courses/courseinstructor/<path:object_id>/change/ -> change_view
+    - api/user/password/change/ -> view
+    Frontend components that might use this:
+      * ChangeList.js or ChangeList.vue (for listings)
+      * ChangeDetail.js or ChangeDetail.vue (for details)
+      * ChangeForm.js or ChangeForm.vue (for creating/editing)
+
+  Resource: Password
+    - admin/users/customuser/<id>/password/ -> user_change_password
+    Frontend components that might use this:
+      * PasswordList.js or PasswordList.vue (for listings)
+      * PasswordDetail.js or PasswordDetail.vue (for details)
+      * PasswordForm.js or PasswordForm.vue (for creating/editing)
+
+  Resource: Customuser
+    - admin/users/customuser/ -> changelist_view
+    Frontend components that might use this:
+      * CustomuserList.js or CustomuserList.vue (for listings)
+      * CustomuserDetail.js or CustomuserDetail.vue (for details)
+      * CustomuserForm.js or CustomuserForm.vue (for creating/editing)
+
+  Resource: Emailverification
+    - admin/users/emailverification/ -> changelist_view
+    Frontend components that might use this:
+      * EmailverificationList.js or EmailverificationList.vue (for listings)
+      * EmailverificationDetail.js or EmailverificationDetail.vue (for details)
+      * EmailverificationForm.js or EmailverificationForm.vue (for creating/editing)
+
+  Resource: Passwordreset
+    - admin/users/passwordreset/ -> changelist_view
+    Frontend components that might use this:
+      * PasswordresetList.js or PasswordresetList.vue (for listings)
+      * PasswordresetDetail.js or PasswordresetDetail.vue (for details)
+      * PasswordresetForm.js or PasswordresetForm.vue (for creating/editing)
+
+  Resource: Loginlog
+    - admin/users/loginlog/ -> changelist_view
+    Frontend components that might use this:
+      * LoginlogList.js or LoginlogList.vue (for listings)
+      * LoginlogDetail.js or LoginlogDetail.vue (for details)
+      * LoginlogForm.js or LoginlogForm.vue (for creating/editing)
+
+  Resource: Usersession
+    - admin/users/usersession/ -> changelist_view
+    Frontend components that might use this:
+      * UsersessionList.js or UsersessionList.vue (for listings)
+      * UsersessionDetail.js or UsersessionDetail.vue (for details)
+      * UsersessionForm.js or UsersessionForm.vue (for creating/editing)
+
+  Resource: Course
+    - admin/courses/course/ -> changelist_view
+    Frontend components that might use this:
+      * CourseList.js or CourseList.vue (for listings)
+      * CourseDetail.js or CourseDetail.vue (for details)
+      * CourseForm.js or CourseForm.vue (for creating/editing)
+
+  Resource: Module
+    - admin/courses/module/ -> changelist_view
+    Frontend components that might use this:
+      * ModuleList.js or ModuleList.vue (for listings)
+      * ModuleDetail.js or ModuleDetail.vue (for details)
+      * ModuleForm.js or ModuleForm.vue (for creating/editing)
+
+  Resource: Lesson
+    - admin/courses/lesson/ -> changelist_view
+    Frontend components that might use this:
+      * LessonList.js or LessonList.vue (for listings)
+      * LessonDetail.js or LessonDetail.vue (for details)
+      * LessonForm.js or LessonForm.vue (for creating/editing)
+
+  Resource: Question
+    - admin/courses/question/ -> changelist_view
+    Frontend components that might use this:
+      * QuestionList.js or QuestionList.vue (for listings)
+      * QuestionDetail.js or QuestionDetail.vue (for details)
+      * QuestionForm.js or QuestionForm.vue (for creating/editing)
+
+  Resource: Enrollment
+    - admin/courses/enrollment/ -> changelist_view
+    Frontend components that might use this:
+      * EnrollmentList.js or EnrollmentList.vue (for listings)
+      * EnrollmentDetail.js or EnrollmentDetail.vue (for details)
+      * EnrollmentForm.js or EnrollmentForm.vue (for creating/editing)
+
+  Resource: Progress
+    - admin/courses/progress/ -> changelist_view
+    Frontend components that might use this:
+      * ProgressList.js or ProgressList.vue (for listings)
+      * ProgressDetail.js or ProgressDetail.vue (for details)
+      * ProgressForm.js or ProgressForm.vue (for creating/editing)
+
+  Resource: Assessmentattempt
+    - admin/courses/assessmentattempt/ -> changelist_view
+    Frontend components that might use this:
+      * AssessmentattemptList.js or AssessmentattemptList.vue (for listings)
+      * AssessmentattemptDetail.js or AssessmentattemptDetail.vue (for details)
+      * AssessmentattemptForm.js or AssessmentattemptForm.vue (for creating/editing)
+
+  Resource: Review
+    - admin/courses/review/ -> changelist_view
+    Frontend components that might use this:
+      * ReviewList.js or ReviewList.vue (for listings)
+      * ReviewDetail.js or ReviewDetail.vue (for details)
+      * ReviewForm.js or ReviewForm.vue (for creating/editing)
+
+  Resource: Certificate
+    - admin/courses/certificate/ -> changelist_view
+    Frontend components that might use this:
+      * CertificateList.js or CertificateList.vue (for listings)
+      * CertificateDetail.js or CertificateDetail.vue (for details)
+      * CertificateForm.js or CertificateForm.vue (for creating/editing)
+
+  Resource: Category
+    - admin/courses/category/ -> changelist_view
+    Frontend components that might use this:
+      * CategoryList.js or CategoryList.vue (for listings)
+      * CategoryDetail.js or CategoryDetail.vue (for details)
+      * CategoryForm.js or CategoryForm.vue (for creating/editing)
+
+  Resource: Resource
+    - admin/courses/resource/ -> changelist_view
+    Frontend components that might use this:
+      * ResourceList.js or ResourceList.vue (for listings)
+      * ResourceDetail.js or ResourceDetail.vue (for details)
+      * ResourceForm.js or ResourceForm.vue (for creating/editing)
+
+  Resource: Answer
+    - admin/courses/answer/ -> changelist_view
+    Frontend components that might use this:
+      * AnswerList.js or AnswerList.vue (for listings)
+      * AnswerDetail.js or AnswerDetail.vue (for details)
+      * AnswerForm.js or AnswerForm.vue (for creating/editing)
+
+  Resource: Attemptanswer
+    - admin/courses/attemptanswer/ -> changelist_view
+    Frontend components that might use this:
+      * AttemptanswerList.js or AttemptanswerList.vue (for listings)
+      * AttemptanswerDetail.js or AttemptanswerDetail.vue (for details)
+      * AttemptanswerForm.js or AttemptanswerForm.vue (for creating/editing)
+
+  Resource: Note
+    - admin/courses/note/ -> changelist_view
+    Frontend components that might use this:
+      * NoteList.js or NoteList.vue (for listings)
+      * NoteDetail.js or NoteDetail.vue (for details)
+      * NoteForm.js or NoteForm.vue (for creating/editing)
+
+  Resource: Assessment
+    - admin/courses/assessment/ -> changelist_view
+    Frontend components that might use this:
+      * AssessmentList.js or AssessmentList.vue (for listings)
+      * AssessmentDetail.js or AssessmentDetail.vue (for details)
+      * AssessmentForm.js or AssessmentForm.vue (for creating/editing)
+
+  Resource: Courseinstructor
+    - admin/courses/courseinstructor/ -> changelist_view
+    Frontend components that might use this:
+      * CourseinstructorList.js or CourseinstructorList.vue (for listings)
+      * CourseinstructorDetail.js or CourseinstructorDetail.vue (for details)
+      * CourseinstructorForm.js or CourseinstructorForm.vue (for creating/editing)
+
+  Resource: $
+    - api/^categories/$ -> CategoryViewSet
+    - api/^categories/(?P<slug>[^/.]+)/$ -> CategoryViewSet
+    - api/^courses/$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/enroll/$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/modules/$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/review/$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/reviews/$ -> CourseViewSet
+    - api/^modules/$ -> ModuleViewSet
+    - api/^modules/(?P<pk>[^/.]+)/$ -> ModuleViewSet
+    - api/^modules/(?P<pk>[^/.]+)/lessons/$ -> ModuleViewSet
+    - api/^lessons/$ -> LessonViewSet
+    - api/^lessons/(?P<pk>[^/.]+)/$ -> LessonViewSet
+    - api/^enrollments/$ -> EnrollmentViewSet
+    - api/^enrollments/(?P<pk>[^/.]+)/$ -> EnrollmentViewSet
+    - api/user/^sessions/$ -> UserSessionViewSet
+    - api/user/^sessions/(?P<pk>[^/.]+)/$ -> UserSessionViewSet
+    Frontend components that might use this:
+      * $List.js or $List.vue (for listings)
+      * $Detail.js or $Detail.vue (for details)
+      * $Form.js or $Form.vue (for creating/editing)
+
+  Resource: ?$
+    - api/^categories\.(?P<format>[a-z0-9]+)/?$ -> CategoryViewSet
+    - api/^categories/(?P<slug>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> CategoryViewSet
+    - api/^courses\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/enroll\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/modules\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/review\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^courses/(?P<slug>[^/.]+)/reviews\.(?P<format>[a-z0-9]+)/?$ -> CourseViewSet
+    - api/^modules\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+    - api/^modules/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+    - api/^modules/(?P<pk>[^/.]+)/lessons\.(?P<format>[a-z0-9]+)/?$ -> ModuleViewSet
+    - api/^lessons\.(?P<format>[a-z0-9]+)/?$ -> LessonViewSet
+    - api/^lessons/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> LessonViewSet
+    - api/^enrollments\.(?P<format>[a-z0-9]+)/?$ -> EnrollmentViewSet
+    - api/^enrollments/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> EnrollmentViewSet
+    - api/user/^sessions\.(?P<format>[a-z0-9]+)/?$ -> UserSessionViewSet
+    - api/user/^sessions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ -> UserSessionViewSet
+    Frontend components that might use this:
+      * ?$List.js or ?$List.vue (for listings)
+      * ?$Detail.js or ?$Detail.vue (for details)
+      * ?$Form.js or ?$Form.vue (for creating/editing)
+
+  Resource: Api
+    - api/ -> view
+    Frontend components that might use this:
+      * ApiList.js or ApiList.vue (for listings)
+      * ApiDetail.js or ApiDetail.vue (for details)
+      * ApiForm.js or ApiForm.vue (for creating/editing)
+
+  Resource: <drf_format_suffix:format>
+    - api/<drf_format_suffix:format> -> view
+    - api/user/<drf_format_suffix:format> -> view
+    Frontend components that might use this:
+      * <drf_format_suffix:format>List.js or <drf_format_suffix:format>List.vue (for listings)
+      * <drf_format_suffix:format>Detail.js or <drf_format_suffix:format>Detail.vue (for details)
+      * <drf_format_suffix:format>Form.js or <drf_format_suffix:format>Form.vue (for creating/editing)
+
+  Resource: Token
+    - api/token/ -> view
+    Frontend components that might use this:
+      * TokenList.js or TokenList.vue (for listings)
+      * TokenDetail.js or TokenDetail.vue (for details)
+      * TokenForm.js or TokenForm.vue (for creating/editing)
+
+  Resource: Refresh
+    - api/token/refresh/ -> view
+    - api/user/token/refresh/ -> view
+    Frontend components that might use this:
+      * RefreshList.js or RefreshList.vue (for listings)
+      * RefreshDetail.js or RefreshDetail.vue (for details)
+      * RefreshForm.js or RefreshForm.vue (for creating/editing)
+
+  Resource: Db-status
+    - api/system/db-status/ -> view
+    Frontend components that might use this:
+      * Db-statusList.js or Db-statusList.vue (for listings)
+      * Db-statusDetail.js or Db-statusDetail.vue (for details)
+      * Db-statusForm.js or Db-statusForm.vue (for creating/editing)
+
+  Resource: Db-stats
+    - api/system/db-stats/ -> view
+    Frontend components that might use this:
+      * Db-statsList.js or Db-statsList.vue (for listings)
+      * Db-statsDetail.js or Db-statsDetail.vue (for details)
+      * Db-statsForm.js or Db-statsForm.vue (for creating/editing)
+
+  Resource: Register
+    - api/user/register/ -> view
+    Frontend components that might use this:
+      * RegisterList.js or RegisterList.vue (for listings)
+      * RegisterDetail.js or RegisterDetail.vue (for details)
+      * RegisterForm.js or RegisterForm.vue (for creating/editing)
+
+  Resource: Me
+    - api/user/me/ -> view
+    Frontend components that might use this:
+      * MeList.js or MeList.vue (for listings)
+      * MeDetail.js or MeDetail.vue (for details)
+      * MeForm.js or MeForm.vue (for creating/editing)
+
+  Resource: Profile
+    - api/user/profile/ -> view
+    Frontend components that might use this:
+      * ProfileList.js or ProfileList.vue (for listings)
+      * ProfileDetail.js or ProfileDetail.vue (for details)
+      * ProfileForm.js or ProfileForm.vue (for creating/editing)
+
+  Resource: Reset
+    - api/user/password/reset/ -> view
+    Frontend components that might use this:
+      * ResetList.js or ResetList.vue (for listings)
+      * ResetDetail.js or ResetDetail.vue (for details)
+      * ResetForm.js or ResetForm.vue (for creating/editing)
+
+  Resource: Confirm
+    - api/user/password/reset/confirm/ -> view
+    Frontend components that might use this:
+      * ConfirmList.js or ConfirmList.vue (for listings)
+      * ConfirmDetail.js or ConfirmDetail.vue (for details)
+      * ConfirmForm.js or ConfirmForm.vue (for creating/editing)
+
+  Resource: Verify
+    - api/user/email/verify/ -> view
+    Frontend components that might use this:
+      * VerifyList.js or VerifyList.vue (for listings)
+      * VerifyDetail.js or VerifyDetail.vue (for details)
+      * VerifyForm.js or VerifyForm.vue (for creating/editing)
+
+  Resource: Resend
+    - api/user/email/verify/resend/ -> view
+    Frontend components that might use this:
+      * ResendList.js or ResendList.vue (for listings)
+      * ResendDetail.js or ResendDetail.vue (for details)
+      * ResendForm.js or ResendForm.vue (for creating/editing)
+
+  Resource: User
+    - api/user/ -> view
+    Frontend components that might use this:
+      * UserList.js or UserList.vue (for listings)
+      * UserDetail.js or UserDetail.vue (for details)
+      * UserForm.js or UserForm.vue (for creating/editing)
+
+================================================================================
+ISSUES SUMMARY
+================================================================================
+Warning: Field 'is_active' in serializer 'SubscriptionSerializer' not found in model 'Subscription'
+Warning: Field 'days_remaining' in serializer 'SubscriptionSerializer' not found in model 'Subscription'
+Warning: Field 'score_percentage' in serializer 'AssessmentAttemptSerializer' not found in model 'AssessmentAttempt'
+Warning: Field 'course' in serializer 'CertificateSerializer' not found in model 'Certificate'
+Warning: Field 'user' in serializer 'CertificateSerializer' not found in model 'Certificate'
+Warning: Field 'category_id' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'rating' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'enrolled_students' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'is_enrolled' in serializer 'CourseSerializer' not found in model 'Course'
+Warning: Field 'course_id' in serializer 'EnrollmentSerializer' not found in model 'Enrollment'
+Warning: Field 'premium_resources' in serializer 'LessonSerializer' not found in model 'Lesson'
+Warning: Field 'is_completed' in serializer 'LessonSerializer' not found in model 'Lesson'
+
+================================================================================
+CONCLUSION
+================================================================================
+This report provides a comprehensive overview of your Django models, views, serializers, and URLs.
+Use it to ensure consistency between your backend components and to guide frontend development.
+
+For frontend-backend consistency:
+1. Ensure your frontend forms have field names that match your models and serializers
+2. Make sure your API calls from the frontend match the URLs identified in this report
+3. Check for any issues highlighted in the ISSUES SUMMARY section
+
+Remember that model fields should be the single source of truth for your application's data structure.

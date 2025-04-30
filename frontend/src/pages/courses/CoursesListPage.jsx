@@ -1,6 +1,39 @@
+/**
+ * File: frontend/src/pages/courses/CoursesListPage.jsx
+ * Purpose: Course listing page component for the educational platform
+ * 
+ * This component:
+ * 1. Displays a paginated, filterable list of all courses
+ * 2. Provides search, filtering by category and level, and sorting options
+ * 3. Shows course cards with details and links to individual course pages
+ * 4. Handles pagination for large course collections
+ * 
+ * Key Updates (2025-04-29):
+ * - Fixed API integration to use proper endpoint structure
+ * - Updated imports to use named service exports from api.js
+ * - Changed course links to use slug instead of ID to match backend expectations
+ * - Enabled real API calls instead of dummy data
+ * - Added proper error handling for API failures
+ * 
+ * API Endpoints Used:
+ * - GET /courses/ - List all courses with optional filters
+ * - GET /categories/ - List all course categories
+ * 
+ * URL Structure:
+ * - Course list: /courses
+ * - Individual course: /courses/:slug (not /courses/:id)
+ * 
+ * Variables to modify for customization:
+ * - coursesPerPage: Number of courses to display per page
+ * 
+ * Created by: Professor Santhanam
+ * Last updated: 2025-04-29 12:26:45
+ * Updated by: cadsanthanam
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../services/api';
+import { courseService, categoryService } from '../../services/api';
 
 const CoursesListPage = () => {
   const [courses, setCourses] = useState([]);
@@ -19,200 +52,14 @@ const CoursesListPage = () => {
       try {
         setLoading(true);
         
-        // In a real application, this would be API calls
-        // const [coursesResponse, categoriesResponse] = await Promise.all([
-        //   api.get('/api/courses/'),
-        //   api.get('/api/categories/')
-        // ]);
+        // Make real API calls to fetch data
+        const [coursesResponse, categoriesResponse] = await Promise.all([
+          courseService.getAllCourses(),
+          categoryService.getAllCategories()
+        ]);
         
-        // Simulating API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Dummy categories data
-        const dummyCategories = [
-          { id: 1, name: 'Web Development', count: 12 },
-          { id: 2, name: 'Data Science', count: 8 },
-          { id: 3, name: 'Mobile Development', count: 5 },
-          { id: 4, name: 'DevOps', count: 4 },
-          { id: 5, name: 'Design', count: 6 },
-          { id: 6, name: 'Business', count: 7 },
-          { id: 7, name: 'Marketing', count: 3 }
-        ];
-        
-        // Dummy courses data
-        const dummyCourses = [
-          {
-            id: 1,
-            title: 'Introduction to Web Development',
-            description: 'Learn the fundamentals of HTML, CSS, and JavaScript to build modern websites.',
-            instructor: 'John Doe',
-            category: { id: 1, name: 'Web Development' },
-            thumbnail: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Beginner',
-            price: 0,
-            rating: 4.7,
-            enrolled_count: 1250,
-            duration: '12 hours',
-            updated_at: '2025-03-15'
-          },
-          {
-            id: 2,
-            title: 'Python Programming Masterclass',
-            description: 'Master Python programming from basics to advanced concepts with practical projects.',
-            instructor: 'Jane Smith',
-            category: { id: 2, name: 'Data Science' },
-            thumbnail: 'https://images.unsplash.com/photo-1526379879527-8559ecfcaec0?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Intermediate',
-            price: 49.99,
-            rating: 4.9,
-            enrolled_count: 980,
-            duration: '24 hours',
-            updated_at: '2025-03-20'
-          },
-          {
-            id: 3,
-            title: 'Data Science Fundamentals',
-            description: 'Learn to analyze and visualize data to extract meaningful insights.',
-            instructor: 'Robert Johnson',
-            category: { id: 2, name: 'Data Science' },
-            thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Beginner',
-            price: 39.99,
-            rating: 4.6,
-            enrolled_count: 820,
-            duration: '18 hours',
-            updated_at: '2025-02-28'
-          },
-          {
-            id: 4,
-            title: 'React.js - From Beginner to Advanced',
-            description: 'Build powerful single-page applications with React.js framework.',
-            instructor: 'Emily Chen',
-            category: { id: 1, name: 'Web Development' },
-            thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Intermediate',
-            price: 59.99,
-            rating: 4.8,
-            enrolled_count: 1450,
-            duration: '20 hours',
-            updated_at: '2025-04-05'
-          },
-          {
-            id: 5,
-            title: 'iOS App Development with Swift',
-            description: 'Learn to build professional iOS applications using Swift and Xcode.',
-            instructor: 'Michael Brown',
-            category: { id: 3, name: 'Mobile Development' },
-            thumbnail: 'https://images.unsplash.com/photo-1580894732444-8ecded7900cd?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Advanced',
-            price: 69.99,
-            rating: 4.5,
-            enrolled_count: 760,
-            duration: '26 hours',
-            updated_at: '2025-03-12'
-          },
-          {
-            id: 6,
-            title: 'DevOps for Beginners',
-            description: 'Master the tools and practices for efficient software development and operations.',
-            instructor: 'Sarah Wilson',
-            category: { id: 4, name: 'DevOps' },
-            thumbnail: 'https://images.unsplash.com/photo-1607799279861-4dd421887fb3?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Beginner',
-            price: 0,
-            rating: 4.3,
-            enrolled_count: 520,
-            duration: '15 hours',
-            updated_at: '2025-01-20'
-          },
-          {
-            id: 7,
-            title: 'UI/UX Design Principles',
-            description: 'Learn to create beautiful and functional user interfaces that delight users.',
-            instructor: 'David Lee',
-            category: { id: 5, name: 'Design' },
-            thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Intermediate',
-            price: 49.99,
-            rating: 4.7,
-            enrolled_count: 890,
-            duration: '22 hours',
-            updated_at: '2025-04-10'
-          },
-          {
-            id: 8,
-            title: 'Android Development with Kotlin',
-            description: 'Build modern Android apps using Kotlin programming language.',
-            instructor: 'Lisa Rodriguez',
-            category: { id: 3, name: 'Mobile Development' },
-            thumbnail: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Intermediate',
-            price: 59.99,
-            rating: 4.6,
-            enrolled_count: 720,
-            duration: '24 hours',
-            updated_at: '2025-03-01'
-          },
-          {
-            id: 9,
-            title: 'Digital Marketing Fundamentals',
-            description: 'Learn effective strategies to promote products and services in the digital age.',
-            instructor: 'Alexandra Kim',
-            category: { id: 7, name: 'Marketing' },
-            thumbnail: 'https://images.unsplash.com/photo-1432888622747-4eb9a8efeb07?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Beginner',
-            price: 29.99,
-            rating: 4.4,
-            enrolled_count: 650,
-            duration: '16 hours',
-            updated_at: '2025-02-15'
-          },
-          {
-            id: 10,
-            title: 'Advanced JavaScript Patterns',
-            description: 'Master design patterns and advanced concepts in JavaScript programming.',
-            instructor: 'Thomas Reed',
-            category: { id: 1, name: 'Web Development' },
-            thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Advanced',
-            price: 79.99,
-            rating: 4.9,
-            enrolled_count: 540,
-            duration: '28 hours',
-            updated_at: '2025-04-15'
-          },
-          {
-            id: 11,
-            title: 'Business Analytics with Excel',
-            description: 'Learn data analysis techniques using Microsoft Excel for business decision making.',
-            instructor: 'Jennifer Parker',
-            category: { id: 6, name: 'Business' },
-            thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Beginner',
-            price: 34.99,
-            rating: 4.5,
-            enrolled_count: 920,
-            duration: '14 hours',
-            updated_at: '2025-03-25'
-          },
-          {
-            id: 12,
-            title: 'Machine Learning Fundamentals',
-            description: 'Introduction to machine learning algorithms and their applications.',
-            instructor: 'Dr. Alan Wong',
-            category: { id: 2, name: 'Data Science' },
-            thumbnail: 'https://images.unsplash.com/photo-1527474305487-b87b222841cc?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=600&q=80',
-            level: 'Intermediate',
-            price: 69.99,
-            rating: 4.8,
-            enrolled_count: 780,
-            duration: '30 hours',
-            updated_at: '2025-04-08'
-          }
-        ];
-        
-        setCourses(dummyCourses);
-        setCategories(dummyCategories);
+        setCourses(coursesResponse.data);
+        setCategories(categoriesResponse.data);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load courses. Please try again.');
@@ -226,24 +73,27 @@ const CoursesListPage = () => {
 
   // Filter and sort courses
   const filteredCourses = courses.filter(course => {
-    const matchesCategory = selectedCategory === 'all' || course.category.id === parseInt(selectedCategory);
-    const matchesLevel = selectedLevel === 'all' || course.level.toLowerCase() === selectedLevel.toLowerCase();
-    const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          course.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || 
+      (course.category && (course.category.id === parseInt(selectedCategory) || course.category.slug === selectedCategory));
+    const matchesLevel = selectedLevel === 'all' || 
+      (course.level && course.level.toLowerCase() === selectedLevel.toLowerCase());
+    const matchesSearch = 
+      (course.title && course.title.toLowerCase().includes(searchQuery.toLowerCase())) || 
+      (course.description && course.description.toLowerCase().includes(searchQuery.toLowerCase()));
     
     return matchesCategory && matchesLevel && matchesSearch;
   }).sort((a, b) => {
     if (sortBy === 'newest') {
-      return new Date(b.updated_at) - new Date(a.updated_at);
+      return new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
     } else if (sortBy === 'highest-rated') {
-      return b.rating - a.rating;
+      return (b.rating || 0) - (a.rating || 0);
     } else if (sortBy === 'lowest-price') {
-      return a.price - b.price;
+      return (a.price || 0) - (b.price || 0);
     } else if (sortBy === 'highest-price') {
-      return b.price - a.price;
+      return (b.price || 0) - (a.price || 0);
     } else {
       // Default: most popular (by enrolled count)
-      return b.enrolled_count - a.enrolled_count;
+      return (b.enrolled_students || 0) - (a.enrolled_students || 0);
     }
   });
 
@@ -371,8 +221,8 @@ const CoursesListPage = () => {
                 >
                   <option value="all">All Categories</option>
                   {categories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name} ({category.count})
+                    <option key={category.id} value={category.id || category.slug}>
+                      {category.name} ({category.count || category.courses_count || 0})
                     </option>
                   ))}
                 </select>
@@ -439,17 +289,17 @@ const CoursesListPage = () => {
                   <div className="relative">
                     <img 
                       className="h-48 w-full object-cover"
-                      src={course.thumbnail} 
+                      src={course.thumbnail || '/images/course-placeholder.jpg'} 
                       alt={course.title} 
                     />
                     <div className="absolute top-2 right-2 flex flex-col space-y-1">
-                      {course.price === 0 ? (
+                      {(course.price === 0 || course.is_free) ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-800">
                           Free
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                          ${course.price.toFixed(2)}
+                          ${typeof course.price === 'number' ? course.price.toFixed(2) : course.price || 'Paid'}
                         </span>
                       )}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
@@ -461,15 +311,18 @@ const CoursesListPage = () => {
                   <div className="p-6">
                     <div>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
-                        {course.category.name}
+                        {course.category?.name || 'Uncategorized'}
                       </span>
                       <h3 className="mt-2 text-lg font-medium text-gray-900">
-                        <Link to={`/courses/${course.id}`} className="hover:text-primary-600">
+                        {/* Updated to use slug instead of ID */}
+                        <Link to={`/courses/${course.slug}`} className="hover:text-primary-600">
                           {course.title}
                         </Link>
                       </h3>
-                      <p className="mt-1 text-sm text-gray-500">By {course.instructor}</p>
-                      <p className="mt-3 text-sm text-gray-600 line-clamp-3">{course.description}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        By {course.instructor || course.instructor_name || course.instructors?.[0]?.instructor?.first_name || 'Unknown Instructor'}
+                      </p>
+                      <p className="mt-3 text-sm text-gray-600 line-clamp-3">{course.description || course.subtitle || 'No description available.'}</p>
                     </div>
                     
                     <div className="mt-6 flex items-center">
@@ -477,7 +330,7 @@ const CoursesListPage = () => {
                         {[0, 1, 2, 3, 4].map((rating) => (
                           <svg 
                             key={rating} 
-                            className={`h-4 w-4 ${rating < Math.floor(course.rating) ? 'text-yellow-400' : 'text-gray-300'}`}
+                            className={`h-4 w-4 ${rating < Math.floor(course.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
                             xmlns="http://www.w3.org/2000/svg" 
                             viewBox="0 0 20 20" 
                             fill="currentColor"
@@ -486,7 +339,9 @@ const CoursesListPage = () => {
                           </svg>
                         ))}
                       </div>
-                      <p className="ml-2 text-xs text-gray-600">{course.rating} ({course.enrolled_count} students)</p>
+                      <p className="ml-2 text-xs text-gray-600">
+                        {course.rating || 0} ({course.enrolled_count || course.enrolled_students || 0} students)
+                      </p>
                     </div>
                     
                     <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
@@ -494,19 +349,20 @@ const CoursesListPage = () => {
                         <svg className="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {course.duration}
+                        {course.duration || 'Self-paced'}
                       </div>
                       <div className="flex items-center">
                         <svg className="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Last updated: {new Date(course.updated_at).toLocaleDateString()}
+                        Last updated: {new Date(course.updated_at || course.created_at || new Date()).toLocaleDateString()}
                       </div>
                     </div>
                     
                     <div className="mt-6">
+                      {/* Updated to use slug instead of ID */}
                       <Link 
-                        to={`/courses/${course.id}`}
+                        to={`/courses/${course.slug}`}
                         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       >
                         View Details

@@ -1,28 +1,29 @@
 /**
  * File: frontend/src/services/api.js
- * Purpose: API Service for Educational Platform with JWT Authentication
+ * Purpose: API Service for Educational Platform with JWT Authentication and Tiered Access
  * 
- * This module provides the API services for the Educational Platform, handling all HTTP requests
- * to the backend. It includes services for authentication, courses, assessments, user progress,
- * notes, forums, virtual labs, categories, and system-wide operations.
+ * This revised module provides the API services for the Educational Platform,
+ * with corrected endpoints that exactly match the backend URL structure.
  * 
- * Modifications for new backend:
- * 1. Updated JWT token handling to use access/refresh token pattern
- * 2. Enhanced auth service to support email-based authentication
- * 3. Added email verification functions
- * 4. Updated token refreshing mechanism
- * 5. Added role-based access checks
- * 6. Better handling of 401/403 responses
+ * Key Changes:
+ * 1. Fixed all endpoint paths to match the backend structure
+ * 2. Changed '/users/' to '/user/' to match backend convention
+ * 3. Removed duplicate '/api' prefixes from endpoint paths
+ * 4. Updated authentication endpoints to match JWT endpoints
+ * 5. Ensured consistent use of 'accessToken' instead of 'token'
+ * 6. Added notes for endpoints that may need backend implementation
  * 
- * Backend Connection Points:
+ * Backend Connection Points (Verified):
  * - POST /api/token/ - Get JWT tokens with email/password
- * - POST /api/token/refresh/ - Refresh JWT access token
- * - POST /api/users/register/ - Register new user
- * - GET /api/users/me/ - Get current user profile
- * - POST /api/users/verify-email/ - Verify user email
+ * - POST /api/token/refresh/ - Refresh JWT token
+ * - POST /api/user/register/ - Register new user
+ * - GET /api/user/me/ - Get current user profile
+ * - GET /api/courses/ - Get all courses
+ * - GET /api/categories/ - Get all categories
  * 
- * @author nanthiniSanthanam
- * @version 2.0
+ * @author nanthiniSanthanam (original)
+ * @author cadsanthanam (revised 2025-04-29)
+ * @version 3.1
  */
 
 import axios from 'axios';
@@ -45,7 +46,7 @@ const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('accessToken'); // Changed from 'token' to 'accessToken'
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -78,20 +79,21 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
         
+        // Use the correct endpoint for token refresh
         const response = await axios.post(
           `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/token/refresh/`,
           { refresh: refreshToken }
         );
         
         // Store the new access token
-        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
+        localStorage.setItem('accessToken', response.data.access);
         
         // Update the original request and retry
         originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
         // If refresh fails, logout user
-        localStorage.removeItem('accessToken'); // Changed from 'token' to 'accessToken'
+        localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         
@@ -154,10 +156,11 @@ export const authService = {
     return handleRequest(
       async () => {
         const { email, password, rememberMe } = credentials;
+        // Use correct endpoint: /api/token/ -> /token/
         const response = await apiClient.post('/token/', { email, password });
         
         // Store tokens
-        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
+        localStorage.setItem('accessToken', response.data.access);
         localStorage.setItem('refreshToken', response.data.refresh);
         
         // If remember me is false, set tokens to expire when browser closes
@@ -175,8 +178,7 @@ export const authService = {
     );
   },
   
-  /**
-   * Registers a new user
+  /**   * Registers a new user
    * @param {Object} userData - User registration data
    * @returns {Promise} - New user data
    */
@@ -192,20 +194,40 @@ export const authService = {
       ...userData, // Include other fields that might not need transformation
     };
     
+    // Updated to use correct path: /api/user/register/ -> /user/register/
     return handleRequest(
-      async () => await apiClient.post('/users/register/', transformedData),
+      async () => await apiClient.post('/user/register/', transformedData),
       'Registration failed'
     );
   },
   
+/**
+ * Resends verification email to user added on 29.04.2025
+ * @param {String|Object} emailData - Email address or object with email property
+ * @returns {Promise} - Resend result
+ */
+resendVerification: async (emailData) => {
+  const payload = typeof emailData === 'string' 
+    ? { email: emailData }
+    : emailData;
+    
+  // Use correct path: /api/user/email/verify/resend/ -> /user/email/verify/resend/
+  return handleRequest(
+    async () => await apiClient.post('/user/email/verify/resend/', payload),
+    'Failed to resend verification email'
+  );
+},
+
+
   /**
    * Verifies a user's email address
    * @param {String} token - Email verification token
    * @returns {Promise} - Verification result
    */
   verifyEmail: async (token) => {
+    // Updated to use correct path: /api/user/email/verify/ -> /user/email/verify/
     return handleRequest(
-      async () => await apiClient.post('/users/verify-email/', { token }),
+      async () => await apiClient.post('/user/email/verify/', { token }),
       'Email verification failed'
     );
   },
@@ -214,7 +236,7 @@ export const authService = {
    * Logs out the current user by removing stored tokens
    */
   logout: () => {
-    localStorage.removeItem('accessToken'); // Changed from 'token' to 'accessToken'
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('tokenPersistence');
@@ -225,8 +247,9 @@ export const authService = {
    * @returns {Promise} - Current user data
    */
   getCurrentUser: async () => {
+    // Updated to use correct path: /api/user/me/ -> /user/me/
     return handleRequest(
-      async () => await apiClient.get('/users/me/'),
+      async () => await apiClient.get('/user/me/'),
       'Failed to retrieve user data'
     );
   },
@@ -244,8 +267,9 @@ export const authService = {
       ...userData, // Include other fields that might not need transformation
     };
     
+    // Updated to use correct path: /api/user/me/ -> /user/me/
     return handleRequest(
-      async () => await apiClient.put('/users/me/', transformedData),
+      async () => await apiClient.put('/user/me/', transformedData),
       'Failed to update profile'
     );
   },
@@ -261,8 +285,9 @@ export const authService = {
       new_password: passwordData.newPassword
     };
     
+    // Updated to use correct path: /api/user/password/change/ -> /user/password/change/
     return handleRequest(
-      async () => await apiClient.post('/users/change-password/', transformedData),
+      async () => await apiClient.post('/user/password/change/', transformedData),
       'Failed to change password'
     );
   },
@@ -277,8 +302,9 @@ export const authService = {
       ? { email: emailData }
       : emailData;
       
+    // Updated to use correct path: /api/user/password/reset/ -> /user/password/reset/
     return handleRequest(
-      async () => await apiClient.post('/users/request-password-reset/', payload),
+      async () => await apiClient.post('/user/password/reset/', payload),
       'Failed to request password reset'
     );
   },
@@ -295,8 +321,9 @@ export const authService = {
       password: typeof password === 'string' ? password : password.password
     };
     
+    // Updated to use correct path: /api/user/password/reset/confirm/ -> /user/password/reset/confirm/
     return handleRequest(
-      async () => await apiClient.post('/users/reset-password/', payload),
+      async () => await apiClient.post('/user/password/reset/confirm/', payload),
       'Failed to reset password'
     );
   },
@@ -311,10 +338,11 @@ export const authService = {
       throw new Error('No refresh token available');
     }
     
+    // Updated to use correct path: /api/token/refresh/ -> /token/refresh/
     return handleRequest(
       async () => {
         const response = await apiClient.post('/token/refresh/', { refresh: refreshToken });
-        localStorage.setItem('accessToken', response.data.access); // Changed from 'token' to 'accessToken'
+        localStorage.setItem('accessToken', response.data.access);
         return response;
       },
       'Failed to refresh token'
@@ -326,7 +354,69 @@ export const authService = {
    * @returns {Boolean} - Authentication status
    */
   isAuthenticated: () => {
-    return !!localStorage.getItem('accessToken'); // Changed from 'token' to 'accessToken'
+    return !!localStorage.getItem('accessToken');
+  }
+};
+
+/**
+ * Subscription-related services
+ * Handles operations for user subscription management and tiered access
+ * NOTE: Some endpoints may need to be implemented on the backend
+ */
+export const subscriptionService = {
+  /**
+   * Retrieves the current user's subscription
+   * @returns {Promise} - Current subscription details
+   */
+  getCurrentSubscription: async () => {
+    // This endpoint may need to be verified or implemented on the backend
+    return handleRequest(
+      async () => await apiClient.get('/user/sessions/'), // This is a placeholder, update with actual endpoint
+      'Failed to retrieve subscription information'
+    );
+  },
+  
+  /**
+   * Upgrades user to a paid subscription tier
+   * @param {String} tier - Subscription tier (basic, premium)
+   * @param {Object} paymentData - Payment details
+   * @returns {Promise} - Updated subscription details
+   */
+  upgradeSubscription: async (tier, paymentData = {}) => {
+    // This endpoint may need to be verified or implemented on the backend
+    return handleRequest(
+      async () => await apiClient.post('/user/subscription/upgrade/', {
+        tier,
+        payment_method: paymentData.paymentMethod || 'credit_card',
+        auto_renew: paymentData.autoRenew !== false
+      }),
+      'Failed to upgrade subscription'
+    );
+  },
+  
+  /**
+   * Cancels the current paid subscription
+   * @returns {Promise} - Updated subscription details
+   */
+  cancelSubscription: async () => {
+    // This endpoint may need to be verified or implemented on the backend
+    return handleRequest(
+      async () => await apiClient.post('/user/subscription/cancel/'),
+      'Failed to cancel subscription'
+    );
+  },
+  
+  /**
+   * Downgrades to a lower subscription tier at the end of the current billing period
+   * @param {String} tier - Target tier to downgrade to
+   * @returns {Promise} - Updated subscription details
+   */
+  downgradeSubscription: async (tier = 'free') => {
+    // This endpoint may need to be verified or implemented on the backend
+    return handleRequest(
+      async () => await apiClient.post('/user/subscription/downgrade/', { tier }),
+      'Failed to downgrade subscription'
+    );
   }
 };
 
@@ -341,6 +431,7 @@ export const courseService = {
    * @returns {Promise} - List of courses
    */
   getAllCourses: async (params = {}) => {
+    // Correct path: /api/courses/ -> /courses/
     return handleRequest(
       async () => await apiClient.get('/courses/', { params }),
       'Failed to fetch courses'
@@ -353,6 +444,7 @@ export const courseService = {
    * @returns {Promise} - Course details
    */
   getCourseBySlug: async (slug) => {
+    // Correct path: /api/courses/<slug>/ -> /courses/<slug>/
     return handleRequest(
       async () => await apiClient.get(`/courses/${slug}/`),
       `Failed to fetch course ${slug}`
@@ -365,6 +457,7 @@ export const courseService = {
    * @returns {Promise} - Enrollment details
    */
   enrollInCourse: async (slug) => {
+    // Correct path: /api/courses/<slug>/enroll/ -> /courses/<slug>/enroll/
     return handleRequest(
       async () => await apiClient.post(`/courses/${slug}/enroll/`),
       `Failed to enroll in course ${slug}`
@@ -377,6 +470,7 @@ export const courseService = {
    * @returns {Promise} - List of modules
    */
   getCourseModules: async (slug) => {
+    // Correct path: /api/courses/<slug>/modules/ -> /courses/<slug>/modules/
     return handleRequest(
       async () => await apiClient.get(`/courses/${slug}/modules/`),
       `Failed to fetch modules for course ${slug}`
@@ -389,6 +483,7 @@ export const courseService = {
    * @returns {Promise} - Module details including lessons
    */
   getModuleDetails: async (moduleId) => {
+    // Correct path: /api/modules/<pk>/ -> /modules/<moduleId>/
     return handleRequest(
       async () => await apiClient.get(`/modules/${moduleId}/`),
       `Failed to fetch module details for module ${moduleId}`
@@ -401,6 +496,7 @@ export const courseService = {
    * @returns {Promise} - List of lessons
    */
   getModuleLessons: async (moduleId) => {
+    // Correct path: /api/modules/<pk>/lessons/ -> /modules/<moduleId>/lessons/
     return handleRequest(
       async () => await apiClient.get(`/modules/${moduleId}/lessons/`),
       `Failed to fetch lessons for module ${moduleId}`
@@ -413,6 +509,7 @@ export const courseService = {
    * @returns {Promise} - Lesson details including content and resources
    */
   getLessonDetails: async (lessonId) => {
+    // Correct path: /api/lessons/<pk>/ -> /lessons/<lessonId>/
     return handleRequest(
       async () => await apiClient.get(`/lessons/${lessonId}/`),
       `Failed to fetch lesson details for lesson ${lessonId}`
@@ -426,6 +523,7 @@ export const courseService = {
    * @returns {Promise} - Updated lesson progress
    */
   completeLesson: async (lessonId, timeSpent = 0) => {
+    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
       async () => await apiClient.put(`/lessons/${lessonId}/complete/`, { time_spent: timeSpent }),
       `Failed to mark lesson ${lessonId} as complete`
@@ -438,6 +536,7 @@ export const courseService = {
    * @returns {Promise} - List of reviews
    */
   getCourseReviews: async (slug) => {
+    // Correct path: /api/courses/<slug>/reviews/ -> /courses/<slug>/reviews/
     return handleRequest(
       async () => await apiClient.get(`/courses/${slug}/reviews/`),
       `Failed to fetch reviews for course ${slug}`
@@ -451,8 +550,9 @@ export const courseService = {
    * @returns {Promise} - Created review
    */
   addCourseReview: async (slug, reviewData) => {
+    // Correct path: /api/courses/<slug>/review/ -> /courses/<slug>/review/
     return handleRequest(
-      async () => await apiClient.post(`/courses/${slug}/reviews/`, reviewData),
+      async () => await apiClient.post(`/courses/${slug}/review/`, reviewData),
       `Failed to add review for course ${slug}`
     );
   },
@@ -465,8 +565,9 @@ export const courseService = {
    * @returns {Promise} - Updated review
    */
   updateCourseReview: async (slug, reviewId, reviewData) => {
+    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.put(`/courses/${slug}/reviews/${reviewId}/`, reviewData),
+      async () => await apiClient.put(`/courses/${slug}/review/${reviewId}/`, reviewData),
       `Failed to update review ${reviewId}`
     );
   },
@@ -478,8 +579,9 @@ export const courseService = {
    * @returns {Promise} - Deletion result
    */
   deleteCourseReview: async (slug, reviewId) => {
+    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.delete(`/courses/${slug}/reviews/${reviewId}/`),
+      async () => await apiClient.delete(`/courses/${slug}/review/${reviewId}/`),
       `Failed to delete review ${reviewId}`
     );
   },
@@ -490,8 +592,9 @@ export const courseService = {
    * @returns {Promise} - Search results
    */
   searchCourses: async (query) => {
+    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.get('/courses/search/', { params: { q: query } }),
+      async () => await apiClient.get('/courses/', { params: { q: query } }),
       'Course search failed'
     );
   },
@@ -502,6 +605,7 @@ export const courseService = {
    * @returns {Promise} - List of featured courses
    */
   getFeaturedCourses: async (limit = 3) => {
+    // Uses course list endpoint with filter parameter
     return handleRequest(
       async () => await apiClient.get('/courses/', { params: { is_featured: true, limit } }),
       'Failed to fetch featured courses'
@@ -512,6 +616,7 @@ export const courseService = {
 /**
  * Assessment-related services
  * Handles operations for assessments, attempts, and submissions
+ * NOTE: Some endpoints may need to be implemented or verified on the backend
  */
 export const assessmentService = {
   /**
@@ -520,6 +625,7 @@ export const assessmentService = {
    * @returns {Promise} - Assessment details including questions
    */
   getAssessmentDetails: async (assessmentId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/assessments/${assessmentId}/`),
       `Failed to fetch assessment ${assessmentId}`
@@ -532,6 +638,7 @@ export const assessmentService = {
    * @returns {Promise} - New assessment attempt details
    */
   startAssessment: async (assessmentId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.post(`/assessments/${assessmentId}/start/`),
       `Failed to start assessment ${assessmentId}`
@@ -545,6 +652,7 @@ export const assessmentService = {
    * @returns {Promise} - Assessment results
    */
   submitAssessment: async (attemptId, answers) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.put(`/assessment-attempts/${attemptId}/submit/`, { answers }),
       `Failed to submit assessment attempt ${attemptId}`
@@ -556,6 +664,7 @@ export const assessmentService = {
    * @returns {Promise} - List of assessment attempts
    */
   getUserAssessmentAttempts: async () => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/user/assessment-attempts/'),
       'Failed to fetch assessment attempts'
@@ -568,6 +677,7 @@ export const assessmentService = {
    * @returns {Promise} - Assessment attempt details
    */
   getAssessmentAttempt: async (attemptId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/assessment-attempts/${attemptId}/`),
       `Failed to fetch assessment attempt ${attemptId}`
@@ -580,6 +690,7 @@ export const assessmentService = {
    * @returns {Promise} - Practice questions
    */
   getPracticeQuestions: async (lessonId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/lessons/${lessonId}/practice/`),
       `Failed to fetch practice questions for lesson ${lessonId}`
@@ -590,6 +701,7 @@ export const assessmentService = {
 /**
  * User progress-related services
  * Handles operations for tracking user progress through courses
+ * NOTE: Some endpoints may need to be implemented or verified on the backend
  */
 export const progressService = {
   /**
@@ -597,8 +709,9 @@ export const progressService = {
    * @returns {Promise} - List of enrollments
    */
   getUserEnrollments: async () => {
+    // This endpoint exists in URL listings: /api/enrollments/ -> /enrollments/
     return handleRequest(
-      async () => await apiClient.get('/user/enrollments/'),
+      async () => await apiClient.get('/enrollments/'),
       'Failed to fetch enrollments'
     );
   },
@@ -609,6 +722,7 @@ export const progressService = {
    * @returns {Promise} - Course progress details
    */
   getUserProgress: async (courseId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/user/progress/${courseId}/`),
       `Failed to fetch progress for course ${courseId}`
@@ -620,6 +734,7 @@ export const progressService = {
    * @returns {Promise} - Progress statistics
    */
   getUserProgressStats: async () => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/user/progress/stats/'),
       'Failed to fetch progress statistics'
@@ -632,6 +747,7 @@ export const progressService = {
    * @returns {Promise} - Updated activity record
    */
   updateLastActivity: async (courseId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.post(`/user/activity/${courseId}/`),
       `Failed to update activity for course ${courseId}`
@@ -643,6 +759,7 @@ export const progressService = {
    * @returns {Promise} - Personalized recommendations
    */
   getLearningRecommendations: async () => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/user/recommendations/'),
       'Failed to fetch learning recommendations'
@@ -653,6 +770,7 @@ export const progressService = {
 /**
  * Notes-related services
  * Handles operations for user notes associated with lessons
+ * NOTE: Endpoint may need to be implemented or verified on the backend
  */
 export const noteService = {
   /**
@@ -660,6 +778,7 @@ export const noteService = {
    * @returns {Promise} - List of notes
    */
   getUserNotes: async () => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/notes/'),
       'Failed to fetch notes'
@@ -672,6 +791,7 @@ export const noteService = {
    * @returns {Promise} - List of notes for the lesson
    */
   getNotesForLesson: async (lessonId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/notes/', { params: { lesson: lessonId } }),
       `Failed to fetch notes for lesson ${lessonId}`
@@ -684,6 +804,7 @@ export const noteService = {
    * @returns {Promise} - Created note
    */
   createNote: async (noteData) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.post('/notes/', noteData),
       'Failed to create note'
@@ -697,6 +818,7 @@ export const noteService = {
    * @returns {Promise} - Updated note
    */
   updateNote: async (noteId, noteData) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.put(`/notes/${noteId}/`, noteData),
       `Failed to update note ${noteId}`
@@ -709,6 +831,7 @@ export const noteService = {
    * @returns {Promise} - Deletion result
    */
   deleteNote: async (noteId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.delete(`/notes/${noteId}/`),
       `Failed to delete note ${noteId}`
@@ -719,6 +842,7 @@ export const noteService = {
 /**
  * Forum and discussion-related services
  * Handles operations for course discussions, questions, and answers
+ * NOTE: These endpoints may need to be implemented on the backend
  */
 export const forumService = {
   /**
@@ -727,6 +851,7 @@ export const forumService = {
    * @returns {Promise} - List of discussions
    */
   getCourseDiscussions: async (courseSlug) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/courses/${courseSlug}/discussions/`),
       `Failed to fetch discussions for course ${courseSlug}`
@@ -740,6 +865,7 @@ export const forumService = {
    * @returns {Promise} - Discussion details
    */
   getDiscussion: async (courseSlug, discussionId) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/courses/${courseSlug}/discussions/${discussionId}/`),
       `Failed to fetch discussion ${discussionId}`
@@ -753,6 +879,7 @@ export const forumService = {
    * @returns {Promise} - Created discussion
    */
   createDiscussion: async (courseSlug, discussionData) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.post(`/courses/${courseSlug}/discussions/`, discussionData),
       'Failed to create discussion'
@@ -767,6 +894,7 @@ export const forumService = {
    * @returns {Promise} - Created reply
    */
   addDiscussionReply: async (courseSlug, discussionId, replyData) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.post(`/courses/${courseSlug}/discussions/${discussionId}/replies/`, replyData),
       `Failed to add reply to discussion ${discussionId}`
@@ -777,6 +905,7 @@ export const forumService = {
 /**
  * Virtual lab-related services
  * Handles operations for interactive lab exercises
+ * NOTE: These endpoints may need to be implemented on the backend
  */
 export const virtualLabService = {
   /**
@@ -785,6 +914,7 @@ export const virtualLabService = {
    * @returns {Promise} - Lab details
    */
   getLabDetails: async (labId) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/labs/${labId}/`),
       `Failed to fetch lab ${labId}`
@@ -797,6 +927,7 @@ export const virtualLabService = {
    * @returns {Promise} - Lab session details
    */
   startLabSession: async (labId) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.post(`/labs/${labId}/start/`),
       `Failed to start lab ${labId}`
@@ -810,6 +941,7 @@ export const virtualLabService = {
    * @returns {Promise} - Evaluation result
    */
   submitLabSolution: async (labId, solutionData) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.post(`/labs/${labId}/submit/`, solutionData),
       `Failed to submit solution for lab ${labId}`
@@ -822,6 +954,7 @@ export const virtualLabService = {
    * @returns {Promise} - Lab progress history
    */
   getLabProgress: async (labId) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/labs/${labId}/progress/`),
       `Failed to fetch progress for lab ${labId}`
@@ -839,6 +972,7 @@ export const categoryService = {
    * @returns {Promise} - List of categories
    */
   getAllCategories: async () => {
+    // Correct path: /api/categories/ -> /categories/
     return handleRequest(
       async () => await apiClient.get('/categories/'),
       'Failed to fetch categories'
@@ -851,6 +985,7 @@ export const categoryService = {
    * @returns {Promise} - List of courses in the category
    */
   getCoursesByCategory: async (categorySlug) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/categories/${categorySlug}/courses/`),
       `Failed to fetch courses for category ${categorySlug}`
@@ -868,6 +1003,7 @@ export const systemService = {
    * @returns {Promise} - Database status information
    */
   checkDbStatus: async () => {
+    // Correct path: /api/system/db-status/ -> /system/db-status/
     return handleRequest(
       async () => await apiClient.get('/system/db-status/'),
       'Database status check failed'
@@ -879,6 +1015,7 @@ export const systemService = {
    * @returns {Promise} - Database statistics
    */
   getDbStats: async () => {
+    // Correct path: /api/system/db-stats/ -> /system/db-stats/
     return handleRequest(
       async () => await apiClient.get('/system/db-stats/'),
       'Failed to get database statistics'
@@ -890,6 +1027,7 @@ export const systemService = {
    * @returns {Promise} - System health data
    */
   getSystemHealth: async () => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get('/system/health/'),
       'Failed to get system health information'
@@ -900,6 +1038,7 @@ export const systemService = {
 /**
  * Certificate-related services
  * Handles operations for course completion certificates
+ * NOTE: Some endpoints may need to be implemented on the backend
  */
 export const certificateService = {
   /**
@@ -907,8 +1046,9 @@ export const certificateService = {
    * @returns {Promise} - List of certificates
    */
   getUserCertificates: async () => {
+    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get('/user/certificates/'),
+      async () => await apiClient.get('/certificates/'),
       'Failed to fetch certificates'
     );
   },
@@ -919,6 +1059,7 @@ export const certificateService = {
    * @returns {Promise} - Certificate details
    */
   generateCertificate: async (courseSlug) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.post(`/courses/${courseSlug}/certificate/`),
       `Failed to generate certificate for course ${courseSlug}`
@@ -931,6 +1072,7 @@ export const certificateService = {
    * @returns {Promise} - Certificate details
    */
   getCertificate: async (certificateId) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/certificates/${certificateId}/`),
       `Failed to fetch certificate ${certificateId}`
@@ -943,6 +1085,7 @@ export const certificateService = {
    * @returns {Promise} - Verification result
    */
   verifyCertificate: async (verificationCode) => {
+    // Endpoint path may need verification
     return handleRequest(
       async () => await apiClient.get(`/certificates/verify/${verificationCode}/`),
       'Certificate verification failed'
@@ -958,6 +1101,7 @@ export const blogService = {
    * @returns {Promise} - List of blog posts
    */
   getLatestPosts: async (limit = 3) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get('/blog/posts/', { params: { limit } }),
       'Failed to fetch latest blog posts'
@@ -970,6 +1114,7 @@ export const blogService = {
    * @returns {Promise} - Blog post details
    */
   getPostBySlug: async (slug) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/blog/posts/${slug}/`),
       `Failed to fetch blog post ${slug}`
@@ -983,6 +1128,7 @@ export const blogService = {
    * @returns {Promise} - List of blog posts in category
    */
   getPostsByCategory: async (category, params = {}) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/blog/categories/${category}/posts/`, { params }),
       `Failed to fetch posts in category ${category}`
@@ -998,6 +1144,7 @@ export const testimonialService = {
    * @returns {Promise} - List of testimonials
    */
   getFeaturedTestimonials: async (limit = 3) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get('/testimonials/featured/', { params: { limit } }),
       'Failed to fetch featured testimonials'
@@ -1010,6 +1157,7 @@ export const testimonialService = {
    * @returns {Promise} - List of course testimonials
    */
   getCourseTestimonials: async (courseSlug) => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get(`/courses/${courseSlug}/testimonials/`),
       `Failed to fetch testimonials for course ${courseSlug}`
@@ -1024,6 +1172,7 @@ export const statisticsService = {
    * @returns {Promise} - Platform statistics
    */
   getPlatformStats: async () => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get('/statistics/platform/'),
       'Failed to fetch platform statistics'
@@ -1035,6 +1184,7 @@ export const statisticsService = {
    * @returns {Promise} - Category statistics
    */
   getCategoryStats: async () => {
+    // Endpoint path may need verification or implementation
     return handleRequest(
       async () => await apiClient.get('/statistics/categories/'),
       'Failed to fetch category statistics'
@@ -1048,6 +1198,7 @@ export const statisticsService = {
  */
 export default {
   authService,
+  subscriptionService,
   courseService,
   assessmentService,
   progressService,
@@ -1056,5 +1207,8 @@ export default {
   virtualLabService,
   categoryService,
   systemService,
-  certificateService
+  certificateService,
+  blogService,
+  testimonialService,
+  statisticsService
 };

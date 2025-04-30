@@ -1,3 +1,34 @@
+"""
+File: backend/courses/models.py
+Purpose: Defines all database models for the courses app in the educational platform.
+
+Key models:
+- Category: Course categories
+- Course: Main course information
+- Module: Course modules/sections
+- Lesson: Individual lessons with tiered content access
+- Resource: Additional learning materials
+- Assessment: Quizzes and tests
+- Enrollment: Student course registrations
+- Certificate: Course completion certificates
+
+Modified for tiered access:
+- Added ACCESS_LEVEL_CHOICES to Lesson model
+- Added access_level field to control content visibility
+- Added basic_content and intermediate_content fields for different subscription tiers
+- Added premium field to Resource model
+
+Variables to modify:
+- ACCESS_LEVEL_CHOICES: If you want to change the tier names
+- Default values for the access_level field
+
+Connected files to update:
+1. Create a migration to apply these changes: python manage.py makemigrations
+2. Update the LessonSerializer in backend/courses/serializers.py
+3. Modify LessonDetailView in backend/courses/views.py to respect access levels
+4. Update the frontend ContentAccessController.jsx to match these access levels
+"""
+
 from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
@@ -121,10 +152,33 @@ class Lesson(models.Model):
         ('lab', 'Lab Exercise'),
     )
 
+    # Define access levels for different user types
+    ACCESS_LEVEL_CHOICES = (
+        ('basic', 'Basic - Unregistered Users'),
+        ('intermediate', 'Intermediate - Registered Users'),
+        ('advanced', 'Advanced - Paid Users'),
+    )
+
     module = models.ForeignKey(
         Module, on_delete=models.CASCADE, related_name='lessons')
     title = models.CharField(max_length=255)
-    content = models.TextField()
+
+    # Content fields for different user types
+    content = models.TextField(
+        help_text="Full content visible to all users (or premium content if access_level is set)")
+    basic_content = models.TextField(
+        blank=True, null=True, help_text="Preview content for unregistered users")
+    intermediate_content = models.TextField(
+        blank=True, null=True, help_text="Limited content for registered users")
+
+    # Access control field
+    access_level = models.CharField(
+        max_length=20,
+        choices=ACCESS_LEVEL_CHOICES,
+        default='intermediate',
+        help_text="Minimum access level required to view this lesson"
+    )
+
     duration = models.CharField(
         max_length=50, blank=True, null=True)  # e.g. "15min"
     type = models.CharField(
@@ -158,6 +212,8 @@ class Resource(models.Model):
         upload_to='lesson_resources/', blank=True, null=True)
     url = models.URLField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    premium = models.BooleanField(
+        default=False, help_text="Whether this resource requires a premium subscription")
 
     def __str__(self):
         return f"{self.lesson.title} - {self.title}"

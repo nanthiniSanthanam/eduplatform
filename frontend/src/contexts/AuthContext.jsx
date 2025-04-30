@@ -1,6 +1,6 @@
 /**
  * File: frontend/src/contexts/AuthContext.jsx
- * Purpose: Authentication context provider for JWT-based user authentication
+ * Purpose: Authentication context provider for JWT-based user authentication with subscription management
  * 
  * This context provides:
  * 1. User authentication state management
@@ -8,13 +8,26 @@
  * 3. User registration and profile management
  * 4. Role-based access control functions
  * 5. Email verification status tracking
+ * 6. Subscription management for tiered access
+ * 7. Access level determination (basic, intermediate, advanced)
  * 
- * Modifications for new backend:
- * 1. Updated to work with JWT token authentication
- * 2. Added role-based access control methods
- * 3. Added email verification status checking
- * 4. Enhanced token refresh mechanism
- * 5. Improved error handling for login failures
+ * Modifications for tiered access:
+ * 1. Added subscription state to track user's subscription tier
+ * 2. Added getAccessLevel function to determine content access level
+ * 3. Added subscription management functions (upgrade, cancel)
+ * 4. Added isSubscriber helper function
+ * 5. Connected to subscription endpoints in API
+ * 
+ * Access Levels:
+ * - Unregistered users: basic access
+ * - Registered users: intermediate access
+ * - Paid users: intermediate (basic tier) or advanced (premium tier) access
+ * 
+ * Usage:
+ * const { currentUser, subscription, getAccessLevel, isSubscriber, upgradeSubscription } = useAuth();
+ * 
+ * Variables to modify:
+ * - ACCESS_LEVEL_MAP: Change this if you want to modify how subscription tiers map to access levels
  * 
  * Backend Connection Points:
  * - POST /api/token/ - Get JWT tokens
@@ -22,10 +35,24 @@
  * - POST /api/users/register/ - Register new users
  * - GET /api/users/me/ - Get current user profile
  * - POST /api/users/verify-email/ - Verify user email
+ * - GET /api/users/subscription/current/ - Get current subscription
+ * - POST /api/users/subscription/upgrade/ - Upgrade subscription
+ * - POST /api/users/subscription/cancel/ - Cancel subscription
+ * 
+ * @author nanthiniSanthanam
+ * @version 2.1
  */
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { authService } from '../services/api';
+import { authService, subscriptionService } from '../services/api';
+
+// Map subscription tiers to access levels
+const ACCESS_LEVEL_MAP = {
+  'free': 'intermediate',  // Free registered users get intermediate access
+  'registered': 'intermediate',  // Registered users get intermediate access
+  'basic': 'intermediate',  // Basic paid tier also gets intermediate access
+  'premium': 'advanced'    // Premium paid tier gets advanced access
+};
 
 // Create context
 const AuthContext = createContext(null);
@@ -34,6 +61,14 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // New state for subscription
+  const [subscription, setSubscription] = useState({
+    tier: 'free',
+    status: 'active',
+    isActive: true,
+    daysRemaining: 0
+  });
 
   // Load user on mount and set up token refresh
   useEffect(() => {
@@ -44,6 +79,27 @@ export const AuthProvider = ({ children }) => {
           const response = await authService.getCurrentUser();
           setCurrentUser(response.data);
           
+          // Get subscription information if authenticated
+          try {
+            const subscriptionResponse = await subscriptionService.getCurrentSubscription();
+            setSubscription({
+              tier: subscriptionResponse.data.tier || 'free',
+              status: subscriptionResponse.data.status || 'active',
+              isActive: subscriptionResponse.data.is_active !== false,
+              daysRemaining: subscriptionResponse.data.days_remaining || 0,
+              endDate: subscriptionResponse.data.end_date || null
+            });
+          } catch (subErr) {
+            console.error('Error loading subscription:', subErr);
+            // Set default subscription if can't load
+            setSubscription({
+              tier: 'free',
+              status: 'active',
+              isActive: true,
+              daysRemaining: 0
+            });
+          }
+          
           // Set up token refresh interval
           // Refresh token before it expires (e.g., every 25 minutes for 30 min tokens)
           const refreshInterval = setInterval(() => {
@@ -53,6 +109,12 @@ export const AuthProvider = ({ children }) => {
                 // If refresh fails, log the user out
                 authService.logout();
                 setCurrentUser(null);
+                setSubscription({
+                  tier: 'free',
+                  status: 'active',
+                  isActive: true,
+                  daysRemaining: 0
+                });
                 clearInterval(refreshInterval);
               });
           }, 25 * 60 * 1000); // 25 minutes
@@ -66,10 +128,36 @@ export const AuthProvider = ({ children }) => {
             await authService.refreshToken();
             const retryResponse = await authService.getCurrentUser();
             setCurrentUser(retryResponse.data);
+            
+            // Try to get subscription after refresh
+            try {
+              const subscriptionResponse = await subscriptionService.getCurrentSubscription();
+              setSubscription({
+                tier: subscriptionResponse.data.tier || 'free',
+                status: subscriptionResponse.data.status || 'active',
+                isActive: subscriptionResponse.data.is_active !== false,
+                daysRemaining: subscriptionResponse.data.days_remaining || 0,
+                endDate: subscriptionResponse.data.end_date || null
+              });
+            } catch (subErr) {
+              console.error('Error loading subscription after refresh:', subErr);
+              setSubscription({
+                tier: 'free',
+                status: 'active',
+                isActive: true,
+                daysRemaining: 0
+              });
+            }
           } catch (refreshErr) {
             console.error('Token refresh failed:', refreshErr);
             // If refresh fails too, log the user out
             authService.logout();
+            setSubscription({
+              tier: 'free',
+              status: 'active',
+              isActive: true,
+              daysRemaining: 0
+            });
           }
         } finally {
           setLoading(false);
@@ -82,6 +170,25 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
+
+
+  // Resend verification email
+const resendVerification = async (email) => {
+  try {
+    setError(null);
+    await authService.resendVerification(email);
+    return { success: true, message: 'Verification email sent successfully!' };
+  } catch (err) {
+    console.error('Email verification resend error:', err);
+    const errorMsg = err.response?.data?.detail || 'Failed to resend verification email';
+    setError(errorMsg);
+    return { success: false, error: errorMsg };
+  }
+};
+
+
+
+
   // Login function
   const login = async (email, password, rememberMe = false) => {
     try {
@@ -92,6 +199,26 @@ export const AuthProvider = ({ children }) => {
       // Get user details
       const userResponse = await authService.getCurrentUser();
       setCurrentUser(userResponse.data);
+      
+      // Get subscription details
+      try {
+        const subscriptionResponse = await subscriptionService.getCurrentSubscription();
+        setSubscription({
+          tier: subscriptionResponse.data.tier || 'free',
+          status: subscriptionResponse.data.status || 'active',
+          isActive: subscriptionResponse.data.is_active !== false,
+          daysRemaining: subscriptionResponse.data.days_remaining || 0,
+          endDate: subscriptionResponse.data.end_date || null
+        });
+      } catch (subErr) {
+        console.error('Error loading subscription after login:', subErr);
+        setSubscription({
+          tier: 'free',
+          status: 'active',
+          isActive: true,
+          daysRemaining: 0
+        });
+      }
       
       return true;
     } catch (err) {
@@ -148,6 +275,12 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     authService.logout();
     setCurrentUser(null);
+    setSubscription({
+      tier: 'free',
+      status: 'active',
+      isActive: true,
+      daysRemaining: 0
+    });
   };
 
   // Verify email function
@@ -214,6 +347,58 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Subscription management functions
+  
+  // Upgrade subscription
+  const upgradeSubscription = async (tier, paymentDetails = {}) => {
+    try {
+      setError(null);
+      const response = await subscriptionService.upgradeSubscription(tier, paymentDetails);
+      
+      setSubscription({
+        tier: response.data.tier,
+        status: response.data.status,
+        isActive: response.data.is_active !== false,
+        daysRemaining: response.data.days_remaining || 0,
+        endDate: response.data.end_date || null
+      });
+      
+      return { 
+        success: true, 
+        message: `Successfully upgraded to ${tier} subscription!` 
+      };
+    } catch (err) {
+      console.error('Subscription upgrade error:', err);
+      const errorMsg = err.response?.data?.detail || 'Failed to upgrade subscription';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  };
+  
+  // Cancel subscription
+  const cancelSubscription = async () => {
+    try {
+      setError(null);
+      const response = await subscriptionService.cancelSubscription();
+      
+      setSubscription({
+        ...subscription,
+        status: 'cancelled',
+        isActive: response.data.is_active !== false
+      });
+      
+      return { 
+        success: true, 
+        message: 'Subscription cancelled. You will have access until the end of your billing period.' 
+      };
+    } catch (err) {
+      console.error('Subscription cancellation error:', err);
+      const errorMsg = err.response?.data?.detail || 'Failed to cancel subscription';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  };
+
   // Check if user is authenticated
   const isAuthenticated = () => {
     return !!currentUser;
@@ -228,10 +413,33 @@ export const AuthProvider = ({ children }) => {
   const isInstructor = () => hasRole('instructor');
   const isAdmin = () => hasRole('admin');
   const isStaff = () => hasRole('staff');
+  
+  // Check if user is a subscriber (has paid plan)
+  const isSubscriber = () => {
+    return isAuthenticated() && 
+           subscription.tier !== 'free' && 
+           subscription.isActive;
+  };
+  
+  // Updated getAccessLevel function with the new logic
+  const getAccessLevel = () => {
+    if (!isAuthenticated()) {
+      return 'basic'; // Unregistered users get basic access
+    }
+    
+    // Use the mapping to determine access level
+    const tier = subscription.isActive ? subscription.tier : 'free';
+    return {
+      'free': 'intermediate',  // Free registered users get intermediate access
+      'basic': 'intermediate', // Basic paid tier also gets intermediate access
+      'premium': 'advanced'    // Premium paid tier gets advanced access
+    }[tier] || 'intermediate';
+  };
 
   // Context value
   const value = {
     currentUser,
+    subscription,
     loading,
     error,
     login,
@@ -247,6 +455,12 @@ export const AuthProvider = ({ children }) => {
     isInstructor,
     isAdmin,
     isStaff,
+    resendVerification,
+    // New subscription-related functions
+    upgradeSubscription,
+    cancelSubscription,
+    isSubscriber,
+    getAccessLevel,
     setError: (msg) => setError(msg), // Allow clearing or setting error from components
   };
 
