@@ -53,6 +53,7 @@ urlpatterns = [
 
     # Include user app URLs
     path('api/user/', include('users.urls')),
+    path('api/instructor/', include('instructor_portal.urls')),
 
     # Django REST browsable API authentication
     path('api-auth/', include('rest_framework.urls')),

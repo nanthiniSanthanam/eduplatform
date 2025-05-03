@@ -30,6 +30,7 @@ import Skeleton, { TextSkeleton, CardSkeleton } from './Skeleton';
 import Tooltip from './Tooltip';
 import AnimatedElement from './AnimatedElement';
 import Certificate from './Certificate';
+import Container from './Container'; 
 
 // Form Elements
 import FormInput from './FormInput';
@@ -44,6 +45,7 @@ export {
   // UI Elements
   Button,
   Card,
+  Container,
   Badge,
   Avatar,
   Rating,

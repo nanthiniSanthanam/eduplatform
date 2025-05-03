@@ -1,3 +1,31 @@
+/**
+ * Tailwind CSS Configuration
+ * 
+ * This file configures Tailwind CSS with custom theme settings derived from
+ * our theme.js file to ensure consistency across the application.
+ * 
+ * Features:
+ * - Imports and uses our theme variables from styles/theme.js
+ * - Configures colors, typography, spacing, etc. to match our design system
+ * - Sets up container defaults and custom plugins
+ * 
+ * Variables that can be modified:
+ * - Update the primary, secondary, tertiary colors in the theme.js file
+ * - The container settings can be adjusted based on layout requirements
+ * 
+ * Created: 2025-05-03
+ * Last updated: 2025-05-03 13:15:30
+ * Author: nanthiniSanthanam
+ */
+
+const { 
+  COLORS, 
+  TYPOGRAPHY, 
+  SHADOWS, 
+  LAYOUT, 
+  ANIMATIONS 
+} = require('./src/styles/theme');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -6,8 +34,7 @@ module.exports = {
   ],
 
   theme: {
-
-    // Add container configuration here
+    // Container configuration
     container: {
       center: true,
       padding: {
@@ -16,91 +43,54 @@ module.exports = {
         lg: '4rem',
         xl: '5rem',
       },
-      // Increase max widths for larger screens
       screens: {
         sm: '640px',
         md: '768px',
         lg: '1024px',
         xl: '1280px',
-        '2xl': '1536px',  
-        '3xl': '1600px',
-        '4xl': '1700px',},
+        '2xl': '1536px',
+      },
     },
 
     extend: {
       colors: {
-        primary: {
-          50: '#eef4ff',
-          100: '#daeaff',
-          200: '#bdd6ff',
-          300: '#90bbff',
-          400: '#6096fc',
-          500: '#3d74f4', /* Main brand color - updated for better contrast */
-          600: '#2855db',
-          700: '#2342b8',
-          800: '#1f3896',
-          900: '#1e327a',
-        },
-        secondary: {
-          50: '#fff8f0',
-          100: '#fff0e1',
-          200: '#ffdec1',
-          300: '#ffc68e',
-          400: '#ffa352',
-          500: '#ff7425', /* Secondary color - updated for better contrast */
-          600: '#fa5d14',
-          700: '#d5470f',
-          800: '#a83c14',
-          900: '#883515',
-        },
-        tertiary: {
-          50: '#edfcf8',
-          100: '#d2f7ed',
-          200: '#a8eddd',
-          300: '#73dec9',
-          400: '#40c8b2',
-          500: '#19b29a', /* Tertiary color */
-          600: '#0c8f7c',
-          700: '#0b7268',
-          800: '#0d5b54',
-          900: '#0e4b47',
-        },
-        success: '#10b981',
-        warning: '#f59e0b',
-        error: '#ef4444',
-        info: '#0ea5e9',
+        // Import color palette from theme.js
+        primary: COLORS.primary,
+        secondary: COLORS.secondary,
+        tertiary: COLORS.tertiary,
+        gray: COLORS.gray,
+        // Status colors
+        success: COLORS.status.success,
+        warning: COLORS.status.warning,
+        error: COLORS.status.error,
+        info: COLORS.status.info,
       },
+      
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        display: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        sans: [TYPOGRAPHY.fontFamily.sans],
+        display: [TYPOGRAPHY.fontFamily.display],
+        mono: [TYPOGRAPHY.fontFamily.mono],
       },
-      boxShadow: {
-        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'card': '0 7px 15px rgba(0, 0, 0, 0.03), 0 3px 8px rgba(0, 0, 0, 0.05)',
-        'testimonial': '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.01)',
-      },
-      borderRadius: {
-        'xl': '1rem',
-        '2xl': '1.5rem',
-        '3xl': '2rem',
-      },
+      
+      fontSize: TYPOGRAPHY.fontSize,
+      fontWeight: TYPOGRAPHY.fontWeight,
+      lineHeight: TYPOGRAPHY.lineHeight,
+      
+      boxShadow: SHADOWS,
+      
+      borderRadius: LAYOUT.borderRadius,
+      
       animation: {
-        'fade-in-up': 'fadeInUp 0.6s ease-out forwards',
-        'fade-in': 'fadeIn 0.6s ease-out forwards',
+        'fade-in-up': `fadeInUp ${ANIMATIONS.duration.default} ease-out forwards`,
+        'fade-in': `fadeIn ${ANIMATIONS.duration.default} ease-out forwards`,
+        'slide-down': `slideDown ${ANIMATIONS.duration.fast} ease-out forwards`,
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
-      keyframes: {
-        fadeInUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-      },
+      
+      keyframes: ANIMATIONS.keyframes,
     }
   },
+  
   plugins: [
     require('@tailwindcss/forms'),
     require('@tailwindcss/line-clamp'),

@@ -1192,6 +1192,7 @@ export const statisticsService = {
   }
 };
 
+
 /**
  * Exports all services as a default object
  * This allows importing the entire API or individual services as needed
@@ -1210,5 +1211,6 @@ export default {
   certificateService,
   blogService,
   testimonialService,
-  statisticsService
+  statisticsService,
+  
 };

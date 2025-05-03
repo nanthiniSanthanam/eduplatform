@@ -50,7 +50,7 @@ import CourseLandingPage from './pages/courses/CourseLandingPage';
 import CourseContentPage from './pages/courses/CourseContentPage';
 import AssessmentPage from './pages/courses/AssessmentPage';
 import CoursesListPage from './pages/courses/CoursesListPage';
-
+import CreateLessonPage from './pages/courses/CreateLessonPage';
 // Dashboard Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StudentDashboard from './pages/dashboard/StudentDashboard';
@@ -72,7 +72,7 @@ import CertificatePage from './pages/certificates/CertificatePage';
 import ProtectedRoute from './components/routes/ProtectedRoute';
 
 // Styles
-import './App.css';
+import './Index.css';
 
 function App() {
   return (
@@ -121,6 +121,15 @@ function App() {
                 <MainLayout><CourseContentPage /></MainLayout>
               </ProtectedRoute>
             } 
+          />
+          
+          <Route 
+          path="/courses/:courseSlug/modules/:moduleId/lessons/create" 
+          element={
+            <ProtectedRoute requiredRole="instructor">
+            <CreateLessonPage />
+           </ProtectedRoute>
+          } 
           />
           
           <Route 

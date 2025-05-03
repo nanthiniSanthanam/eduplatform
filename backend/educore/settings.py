@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     # Local apps
     'users',
     'courses',
+    'instructor_portal',
 
 
 ]
