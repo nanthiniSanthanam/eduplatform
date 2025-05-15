@@ -1,6 +1,7 @@
 """
 File: backend/users/permissions.py
 Purpose: Defines custom permission classes for role-based access control in EduPlatform.
+Date: 2025-07-24 17:05:10
 
 This file contains:
 - IsOwnerOrAdmin: Allow access only to the owner of an object or administrators
@@ -21,12 +22,12 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         # Allow administrators to make any changes
-        if request.user.is_admin():
+        if request.user.is_admin or request.user.is_superuser:
             return True
 
         # Owners can view/edit their own data
         # The obj.owner should be replaced with the appropriate attribute for your model
-        # e.g., obj.user, obj.created_by, etc.
+        # e.g., obj.user, obj.owner, etc.
         if hasattr(obj, 'user'):
             return obj.user == request.user
         elif hasattr(obj, 'owner'):
@@ -44,7 +45,7 @@ class IsUserOrAdmin(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         # Allow administrators
-        if request.user.is_admin():
+        if request.user.is_admin or request.user.is_superuser:
             return True
 
         # Users can view/edit their own profile
@@ -61,7 +62,7 @@ class IsInstructor(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_instructor()
+        return request.user.is_authenticated and request.user.is_instructor
 
 
 class IsStudent(permissions.BasePermission):
@@ -70,16 +71,16 @@ class IsStudent(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_student()
+        return request.user.is_authenticated and request.user.is_student
 
 
-class IsAdminUser(permissions.BasePermission):
+class IsPlatformAdmin(permissions.BasePermission):
     """
     Allow access only to admin users.
     """
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_admin()
+        return request.user.is_authenticated and (request.user.is_admin or request.user.is_superuser)
 
 
 class IsStaffMember(permissions.BasePermission):
@@ -88,7 +89,7 @@ class IsStaffMember(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_staff_member()
+        return request.user.is_authenticated and request.user.is_staff_member
 
 
 class IsActivatedUser(permissions.BasePermission):

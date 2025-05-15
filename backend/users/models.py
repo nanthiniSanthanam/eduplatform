@@ -177,18 +177,22 @@ class CustomUser(AbstractUser, PermissionsMixin):
 
         return True
 
+    @property
     def is_student(self):
         """Check if user is a student."""
         return self.role == 'student'
 
+    @property
     def is_instructor(self):
         """Check if user is an instructor."""
         return self.role == 'instructor'
 
+    @property
     def is_admin(self):
         """Check if user is an admin."""
         return self.role == 'admin' or self.is_superuser
 
+    @property
     def is_staff_member(self):
         """Check if user is a staff member."""
         return self.role == 'staff' or self.is_staff

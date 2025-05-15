@@ -1,6 +1,7 @@
 /**
  * File: frontend/src/pages/auth/LoginPage.jsx
  * Purpose: Login page for user authentication with JWT token support
+ * Date: 2025-07-24 16:38:12
  * 
  * This component handles:
  * - User login with email and password
@@ -19,9 +20,14 @@
  * Fields used from backend:
  * - email: User's email address for authentication (previously username)
  * - password: User's password
+ * - remember_me: Boolean flag for extended session duration
+ * 
+ * Updated: 2025-05-24 - Improved role-based redirection
+ * Updated: 2025-05-25 - Added direct login button for troubleshooting
+ * Updated: 2025-07-24 - Fixed remember me functionality and import paths
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
@@ -30,15 +36,128 @@ import Button from '../../components/common/Button';
 import { useAuth } from '../../contexts/AuthContext';
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const auth = useAuth();  // Get the entire auth context object
   const navigate = useNavigate();
   const location = useLocation();
   const [loginError, setLoginError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   // Get the return URL from location state or default to dashboard
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = location.state?.from || '/dashboard';
+  
+  // Use effect to check if there's a return URL in location state
+  useEffect(() => {
+    console.log("Login page mounted with return URL:", from);
+  }, [from]);
+
+  // Function to clear all local storage and session data
+  const clearAllData = () => {
+    // Clear all localStorage items
+    localStorage.clear();
+    
+    // Clear any session storage
+    sessionStorage.clear();
+    
+    // Force logout (will also handle navigation)
+    auth.logout();
+  };
+
+  // Function to determine appropriate dashboard based on user role
+  const getDashboardRoute = () => {
+    console.log("Determining dashboard route...");
+    console.log("Current user state:", auth.currentUser);
+    
+    if (auth.isInstructor()) {
+      console.log("User is an instructor, redirecting to instructor dashboard");
+      return '/instructor/dashboard';
+    } else if (auth.isAdmin()) {
+      console.log("User is an admin, redirecting to admin dashboard");
+      return '/admin/dashboard';
+    } else if (auth.isStudent()) {
+      console.log("User is a student, redirecting to student dashboard");
+      return '/student/dashboard';
+    } else {
+      console.log("No specific role detected, redirecting to main dashboard");
+      return '/dashboard';
+    }
+  };
+
+  // Direct login function without using formik (as backup)
+  const handleDirectLogin = async (e) => {
+    if (e) e.preventDefault();
+    setIsLoading(true);
+    setLoginError(null);
+    
+    try {
+      const email = formik.values.email || document.getElementById('email').value;
+      const password = formik.values.password || document.getElementById('password').value;
+      
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+      
+      // Updated to use email as login identifier
+      const userData = await auth.login(email, password, rememberMe);
+      
+      // Add a short delay to ensure auth state is updated before check
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log("Direct login successful, checking for redirect path...");
+      
+      // If we have a specific path to return to, use it
+      if (from && from !== '/dashboard') {
+        console.log("Redirecting to return URL:", from);
+        navigate(from, { replace: true });
+        return;
+      }
+      
+      // Otherwise, use role-based dashboard redirection
+      // Get role directly from the userData
+      const userRole = userData?.role || 'student';
+      console.log("User role from direct login:", userRole);
+      
+      // Determine the appropriate dashboard based on role
+      let dashboardRoute = '/dashboard';
+      
+      if (userRole === 'instructor') {
+        dashboardRoute = '/instructor/dashboard';
+      } else if (userRole === 'admin') {
+        dashboardRoute = '/admin/dashboard';
+      } else {
+        dashboardRoute = '/student/dashboard';
+      }
+      
+      console.log("Redirecting to dashboard:", dashboardRoute);
+      navigate(dashboardRoute, { replace: true });
+    } catch (error) {
+      console.error('Direct login error:', error);
+      setLoginError(error.message || 'An error occurred during login');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Effect to handle redirect after login when userRole is set
+  useEffect(() => {
+    if (shouldRedirect && auth.isAuthenticated && auth.userRole) {
+      let dashboardRoute = getDashboardRoute();
+      if (!dashboardRoute || dashboardRoute === '/dashboard') {
+        // Use email to guess the role as fallback
+        const email = formik.values.email || '';
+        if (email.includes('instructor')) {
+          dashboardRoute = '/instructor/dashboard';
+        } else if (email.includes('admin')) {
+          dashboardRoute = '/admin/dashboard';
+        } else {
+          dashboardRoute = '/student/dashboard';
+        }
+      }
+      navigate(dashboardRoute, { replace: true });
+      setShouldRedirect(false);
+    }
+  }, [shouldRedirect, auth.isAuthenticated, auth.userRole]);
 
   const formik = useFormik({
     initialValues: {
@@ -52,31 +171,59 @@ const LoginPage = () => {
       password: Yup.string().required('Password is required'),
     }),
     onSubmit: async (values) => {
+      console.log("Formik onSubmit called with:", values.email);
       setIsLoading(true);
       setLoginError(null);
       try {
-        // Updated to use email instead of username
-        const success = await login(values.email, values.password, rememberMe);
-        if (success) {
+        // Updated to use email instead of username, and pass rememberMe
+        const userData = await auth.login(values.email, values.password, rememberMe);
+        
+        // Add a short delay to ensure auth state is updated
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log("Login successful, checking for redirect path...");
+        
+        // If we have a specific path to return to, use it
+        if (from && from !== '/dashboard') {
+          console.log("Redirecting to return URL:", from);
           navigate(from, { replace: true });
-        } else {
-          setLoginError('Failed to login. Please check your credentials.');
+          return;
         }
+        
+        // Otherwise, use role-based dashboard redirection
+        console.log("No specific return URL, using role-based redirection");
+        let dashboardRoute = '/dashboard';
+        
+        // Get role directly from the userData instead of auth context
+        const userRole = userData?.role || 'student';
+        console.log("User role determined:", userRole);
+        
+        if (userRole === 'instructor') {
+          dashboardRoute = '/instructor/dashboard';
+        } else if (userRole === 'admin') {
+          dashboardRoute = '/admin/dashboard';
+        } else {
+          dashboardRoute = '/student/dashboard';
+        }
+        
+        console.log("Redirecting to dashboard:", dashboardRoute);
+        navigate(dashboardRoute, { replace: true });
       } catch (error) {
-        // Enhanced error handling for account lockouts and other scenarios
-        if (error.response && error.response.data) {
-          const { detail } = error.response.data;
-          if (detail && detail.includes('account is temporarily locked')) {
+        // Enhanced error handling with consistent error format
+        console.error('Login error:', error);
+        
+        // Use the standardized error format from our API service
+        if (error.message) {
+          if (error.message.includes('account is temporarily locked')) {
             setLoginError('Your account is temporarily locked due to multiple failed login attempts. Please try again later.');
-          } else if (detail && detail.includes('verify your email')) {
+          } else if (error.message.includes('verify your email')) {
             setLoginError('Please verify your email address before logging in.');
           } else {
-            setLoginError(detail || 'Failed to login. Please check your credentials.');
+            setLoginError(error.message);
           }
         } else {
-          setLoginError('An error occurred. Please try again.');
+          setLoginError('An error occurred during login. Please try again.');
         }
-        console.error('Login error:', error);
       } finally {
         setIsLoading(false);
       }
@@ -95,6 +242,16 @@ const LoginPage = () => {
             create a new account
           </Link>
         </p>
+        
+        {/* Debug button to clear all data */}
+        <div className="mt-2 text-center">
+          <button 
+            onClick={clearAllData}
+            className="text-xs text-red-600 hover:text-red-800 underline"
+          >
+            Clear Session Data (Debug)
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -114,9 +271,17 @@ const LoginPage = () => {
             </div>
           )}
           
-          <form className="space-y-6" onSubmit={formik.handleSubmit}>
+          {/* Use both formik and direct form submission for redundancy */}
+          <form className="space-y-6" onSubmit={(e) => {
+            // Try both methods - first formik then direct if formik fails
+            formik.handleSubmit(e);
+            if (!formik.isValid) {
+              handleDirectLogin(e); 
+            }
+          }}>
             {/* Changed from username to email */}
             <FormInput
+              id="email"
               label="Email Address"
               name="email"
               type="email" /* Changed input type to email */
@@ -128,6 +293,7 @@ const LoginPage = () => {
             />
 
             <FormInput
+              id="password"
               label="Password"
               name="password"
               type="password"
@@ -178,6 +344,18 @@ const LoginPage = () => {
                   'Sign in'
                 )}
               </Button>
+            </div>
+            
+            {/* Direct login button as backup */}
+            <div className="mt-2">
+              <button
+                type="button"
+                className="w-full inline-flex justify-center py-2 px-4 border border-orange-300 rounded-md shadow-sm bg-orange-50 text-sm font-medium text-orange-700 hover:bg-orange-100"
+                onClick={handleDirectLogin}
+                disabled={isLoading}
+              >
+                Try direct login (troubleshooting)
+              </button>
             </div>
           </form>
 

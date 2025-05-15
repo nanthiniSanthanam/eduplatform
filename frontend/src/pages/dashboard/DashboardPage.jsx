@@ -1,6 +1,8 @@
 /**
  * File: frontend/src/pages/dashboard/DashboardPage.jsx
  * Purpose: Generic dashboard that redirects to role-specific dashboard
+ * Version: 2.0.0
+ * Date: 2025-05-22
  * 
  * Key features:
  * 1. Automatically redirects users to their role-specific dashboard
@@ -14,37 +16,48 @@
  * - Provides smooth transition with loading state
  */
 
-import React, { useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const DashboardPage = () => {
-  const { currentUser, loading, isStudent, isInstructor, isAdmin } = useAuth();
+  const { currentUser, userRole, loading, isInstructor, isAdmin, isAuthenticated } = useAuth();
+  const [dashboardPath, setDashboardPath] = useState('');
+  const navigate = useNavigate();
 
-  // Determine which dashboard to show based on user role
-  const getDashboardPath = () => {
-    if (isInstructor()) {
-      return '/instructor/dashboard';
-    } else if (isAdmin()) {
-      return '/admin/dashboard';
-    } else {
-      // Default to student dashboard
-      return '/student/dashboard';
+  useEffect(() => {
+    // Determine which dashboard to show based on user role
+    if (!loading) {
+      let path = '/student/dashboard'; // Default
+
+      if (isInstructor()) {
+        path = '/instructor/dashboard';
+      } else if (isAdmin()) {
+        path = '/admin/dashboard';
+      }
+
+      console.log('Redirecting to dashboard:', path, 'Role:', userRole);
+      setDashboardPath(path);
     }
-  };
+  }, [loading, userRole, isInstructor, isAdmin]);
+
+  // If not authenticated, redirect to login
+  if (!loading && !isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   // If still loading, show a loading indicator
-  if (loading) {
+  if (loading || !dashboardPath) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700"></div>
-        <span className="ml-3 text-primary-700">Loading...</span>
+        <span className="ml-3 text-primary-700">Loading dashboard...</span>
       </div>
     );
   }
 
   // Redirect to role-specific dashboard
-  return <Navigate to={getDashboardPath()} replace />;
+  return <Navigate to={dashboardPath} replace />;
 };
 
 export default DashboardPage;

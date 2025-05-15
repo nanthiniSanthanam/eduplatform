@@ -229,7 +229,7 @@ const PricingPage = () => {
                   
                   {/* Current plan badge */}
                   {isCurrentPlan && (
-                    <Badge color={colors.badge} className="self-start mb-2">
+                    <Badge variant={colors.badge} className="self-start mb-2">
                       Current Plan
                     </Badge>
                   )}

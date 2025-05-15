@@ -25,7 +25,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .views import db_status, db_stats
+from .views import db_status, db_stats, test_static, test_admin_static
 
 # Create a router for API viewsets
 router = DefaultRouter()
@@ -39,8 +39,18 @@ router.register(r'enrollments', EnrollmentViewSet, basename='enrollment')
 urlpatterns = [
     path('admin/', admin.site.urls),
 
+    # Test views for static files
+    path('test-static/', test_static, name='test-static'),
+    path('test-admin-static/', test_admin_static, name='test-admin-static'),
+
     # API endpoints
-    # Include router URLs directly under /api/
+    # Important: Order matters here! The router URLs should come AFTER courses.urls
+    # to ensure the course slug lookups work correctly
+
+    # Include courses app URLs first (has more specific patterns)
+    path('api/', include('courses.urls')),
+
+    # Include router URLs after (has more general patterns)
     path('api/', include(router.urls)),
 
     # User authentication endpoints using JWT
@@ -55,6 +65,24 @@ urlpatterns = [
     path('api/user/', include('users.urls')),
     path('api/instructor/', include('instructor_portal.urls')),
 
+    # Include content app URLs (new)
+    path('api/', include('content.urls')),
+
     # Django REST browsable API authentication
     path('api-auth/', include('rest_framework.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# Add debug toolbar URLs
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns = [
+        path('__debug__/', include(debug_toolbar.urls)),
+    ] + urlpatterns
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
+    # Add this line to serve static files in development
+    urlpatterns += static(settings.STATIC_URL,
+                          document_root=settings.STATIC_ROOT)

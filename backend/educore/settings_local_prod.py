@@ -1,95 +1,123 @@
-r"""
-File: C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings_local_prod.py
-Purpose: Production-like settings that run on your local machine
-
-This file configures Django to simulate production settings while still
-running on your local computer. This gives you a way to test everything
-works as expected before deploying to a real hosting provider.
-
-Variables you might need to modify:
-- SECRET_KEY: For local testing, this doesn't need to be changed
-- ALLOWED_HOSTS: Add your local machine name if needed
-- DATABASE settings: Update if you want to use a dedicated database
 """
-import os
-from .db_settings import *
-from .settings import *
+settings_local_prod.py
+--------------------------------------------------
+Production-like settings for LOCAL simulation.
+Imports base settings, tightens security, but
+still works on 127.0.0.1 without TLS if needed.
+"""
 
-# Turn off debug mode to simulate production
+# fmt: off
+# isort: skip_file
+
+import os
+from pathlib import Path
+from datetime import timedelta
+from .settings import *          # BASE settings already define BASE_DIR, etc.
+
+# ---------------------------------------------------------------------------
+# 0.  GENERAL
+# ---------------------------------------------------------------------------
 DEBUG = False
 
-# But allow showing detailed errors for testing purposes
-SHOW_DETAILED_ERRORS = True
+# Allow both your public domain AND localhost while developing HTTPS locally
+ALLOWED_HOSTS = [
+    'yourdomain.com',
+    'www.yourdomain.com',
+    'localhost',
+    '127.0.0.1',
+]
 
-# Allow connections from localhost
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# ---------------------------------------------------------------------------
+# 1.  SECURITY
+# ---------------------------------------------------------------------------
+# Toggle SSL redirect locally via ENV; default True in CI / cloud
+SECURE_SSL_REDIRECT      = os.getenv('SECURE_SSL_REDIRECT', 'False').lower() == 'true'
+SECURE_HSTS_SECONDS      = 3600
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD      = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER   = True
+SESSION_COOKIE_SECURE       = SECURE_SSL_REDIRECT
+CSRF_COOKIE_SECURE          = SECURE_SSL_REDIRECT
+X_FRAME_OPTIONS             = 'DENY'
 
-# Keep the database settings from your development environment
+# ---------------------------------------------------------------------------
+# 2.  DATABASE
+# ---------------------------------------------------------------------------
+DATABASES = {
+    'default': {
+        'ENGINE'  : 'django.db.backends.postgresql',
+        'NAME'    : os.getenv('DB_NAME', 'eduplatform_prod'),
+        'USER'    : os.getenv('DB_USER', 'eduplatform'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST'    : os.getenv('DB_HOST', 'localhost'),
+        'PORT'    : os.getenv('DB_PORT', '5432'),
+        'CONN_MAX_AGE': 600,
+    }
+}
 
-# Use the file system for email sending instead of actually sending emails
-# This will save emails as files you can inspect in a folder
-# MAIL_BACKEND = 'django.core.mail.backends.filebacked.EmailBackend'
-# EMAIL_FILE_PATH = os.path.join(BASE_DIR, 'sent_emails')
+# ---------------------------------------------------------------------------
+# 3.  STATIC / MEDIA
+# ---------------------------------------------------------------------------
+# For real prod deploy you’d push to CDN; locally we fall back to /static/
+STATIC_URL = os.getenv('STATIC_URL', '/static/')
+MEDIA_URL  = os.getenv('MEDIA_URL',  '/media/')
 
-# Frontend URL for email links
-FRONTEND_URL = 'http://localhost:3000'
+# ---------------------------------------------------------------------------
+# 4.  JWT  /  AUTH
+# ---------------------------------------------------------------------------
+if 'rest_framework_simplejwt.token_blacklist' not in INSTALLED_APPS:
+    INSTALLED_APPS.append('rest_framework_simplejwt.token_blacklist')
 
-# Make media and static files work locally
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static_collected')
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME' : timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS' : True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN'     : True,
+    'ALGORITHM'             : 'HS256',
+    'SIGNING_KEY'           : SECRET_KEY,
+    'AUTH_HEADER_TYPES'     : ('Bearer',),
+    'USER_ID_FIELD'         : 'id',
+    'USER_ID_CLAIM'         : 'user_id',
+    'AUTH_TOKEN_CLASSES'    : ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM'      : 'token_type',
+}
 
+# ---------------------------------------------------------------------------
+# 5.  LOGGING
+# ---------------------------------------------------------------------------
+# Create a portable logs directory *inside* the project
+BASE_LOG_DIR = Path(BASE_DIR, 'logs')
+BASE_LOG_DIR.mkdir(exist_ok=True)
 
-# Email Configuration for Production
-# Add this section to your settings.py file
-
-# Use SMTP backend for actually sending emails
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-
-# SMTP Server Configuration
-# For Gmail
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-# For Outlook/Office 365, use:
-# EMAIL_HOST = 'smtp.office365.com'
-# For custom domain, use your hosting provider's SMTP settings
-
-# Authentication
-EMAIL_HOST_USER = 'nanthini.santhanam@gmail.com'  # Your actual Gmail address
-# (For better security, use environment variables instead of hardcoding)
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASSWORD')
-
-# Sender email address (displayed in From: field)
-DEFAULT_FROM_EMAIL = 'EduPlatform <nanthini.santhanam@gmail.com>'
-# Optional: separate address for error notifications
-SERVER_EMAIL = 'nanthini.santhanam@gmail.com'
-
-# Timeout settings
-EMAIL_TIMEOUT = 30  # seconds before connection times out
-
-# For production, consider rate limiting to prevent abuse
-# This requires additional configuration with a rate limiting library
-
-
-# Ensure we can see errors in the local production environment
 LOGGING = {
-    'version': 1,
+    'version'               : 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {process:d} {thread:d} {message}',
+            'style' : '{',
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
+    'handlers': {
+        'file': {
+            'level'    : 'WARNING',
+            'class'    : 'logging.handlers.RotatingFileHandler',
+            'filename' : str(BASE_LOG_DIR / 'error.log'),
+            'maxBytes' : 5_000_000,   # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'console': {
+            'class'    : 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
+            'handlers' : ['file', 'console'],
+            'level'    : 'WARNING',
             'propagate': True,
         },
     },

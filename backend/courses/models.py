@@ -144,6 +144,27 @@ class Module(models.Model):
 
 
 class Lesson(models.Model):
+    """
+    Lesson model representing individual units of learning within a module.
+
+    Lessons can include different types of content (video, text, etc.) and may have 
+    associated assessments, labs, and resources.
+
+    Content Formatting:
+    - Lessons support rich HTML content including headings and subheadings
+    - Use <h2>, <h3>, <h4> tags to create a hierarchical structure in the content
+    - Example: 
+        <h2>Main Topic</h2>
+        <p>Introduction paragraph...</p>
+        <h3>Subtopic</h3>
+        <p>Detailed content...</p>
+        <h4>Specific Concept</h4>
+        <p>Details about the specific concept...</p>
+
+    - The frontend will render these headings properly with appropriate styling
+    - This allows instructors to organize their content in a structured way
+    - Properly formatted headings also improve accessibility and readability
+    """
     LESSON_TYPE_CHOICES = (
         ('video', 'Video'),
         ('reading', 'Reading'),
@@ -193,6 +214,19 @@ class Lesson(models.Model):
 
     def __str__(self):
         return f"{self.module.title} - {self.title}"
+
+    def save(self, *args, **kwargs):
+        # If this is a new lesson, set order to be last in module
+        if not self.id:
+            try:
+                last_order = Lesson.objects.filter(
+                    module=self.module).aggregate(models.Max('order'))['order__max']
+                if last_order is not None:
+                    self.order = last_order + 1
+            except (KeyError, Lesson.DoesNotExist):
+                self.order = 1
+
+        super().save(*args, **kwargs)
 
 
 class Resource(models.Model):

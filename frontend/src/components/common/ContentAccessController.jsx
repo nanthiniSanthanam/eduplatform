@@ -1,147 +1,153 @@
 /**
  * File: frontend/src/components/common/ContentAccessController.jsx
- * Purpose: Control content display based on user access level for educational platform
- * 
- * This component manages tiered content access in the educational platform:
- * - Shows basic content to unregistered users (previews)
- * - Shows intermediate content to registered users (standard lessons)
- * - Shows advanced content to paid premium users (premium lessons with additional resources)
- * 
- * Access is determined through the AuthContext's getAccessLevel function.
- * The component renders appropriate content based on the user's access level
- * and displays upgrade prompts for content the user cannot access.
- * 
- * Features:
- * - Automatic access level determination through AuthContext
- * - Conditional rendering based on access level
- * - Upgrade prompts with links to register or pricing page
- * - Customizable upgrade messages
- * 
- * Usage example:
- * <ContentAccessController
- *   requiredLevel="intermediate"
- *   basicContent={<p>Preview content</p>}
- *   intermediateContent={<p>Standard content</p>}
- *   advancedContent={<p>Premium content</p>}
- *   upgradeMessage="Upgrade to see full content"
- * />
- * 
- * Variables that may need modification:
- * - DEFAULT_UPGRADE_MESSAGE: Default message shown when content is locked
- * - ACCESS_LEVELS: Object containing the tier level constants (should match backend)
- * - ACCESS_HIERARCHY: Numeric values defining the hierarchy of access levels
- * 
- * Created by: Professor Santhanam
- * Last updated: 2025-04-27
+ * Date: 2025-05-15 15:22:01
+ * Modified: Security & logic fixes based on code review
+ * Purpose: Control content display based on user access level
  */
 
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import Button from './Button';
+import DOMPurify from 'dompurify';
 
-// Default message shown when content is locked - customize this if needed
-const DEFAULT_UPGRADE_MESSAGE = "Upgrade your account to access this content";
-
-// Access level definitions - these match the lesson.access_level values in the database
-// IMPORTANT: These must match the backend Lesson.ACCESS_LEVEL_CHOICES values
+// Define access levels internally since accessLevels.js doesn't exist
 const ACCESS_LEVELS = {
-  BASIC: 'basic',         // Unregistered users
-  INTERMEDIATE: 'intermediate',  // Registered users
-  ADVANCED: 'advanced'    // Paid users
+  BASIC: 'basic',
+  INTERMEDIATE: 'intermediate',
+  ADVANCED: 'advanced'
 };
 
-// Level hierarchy - determines which user can access which content
-// Higher values can access content of lower values
-const ACCESS_HIERARCHY = {
-  [ACCESS_LEVELS.BASIC]: 0,
-  [ACCESS_LEVELS.INTERMEDIATE]: 1,
-  [ACCESS_LEVELS.ADVANCED]: 2
-};
+// Default message shown when content is locked
+const DEFAULT_UPGRADE_MESSAGE = "Upgrade your account to access this premium content";
 
 /**
- * ContentAccessController component
- * @param {React.ReactNode} basicContent - Content visible to all users (unregistered and above)
- * @param {React.ReactNode} intermediateContent - Content visible to registered users (free and paid)
- * @param {React.ReactNode} advancedContent - Content visible only to paid premium users
- * @param {string} requiredLevel - The minimum access level required ('basic', 'intermediate', 'advanced')
- * @param {string} upgradeMessage - Custom message to show when content is locked
+ * Controls access to content based on the user's access level.
+ * Handles content visibility according to subscription tier.
  */
-const ContentAccessController = ({ 
-  basicContent, 
-  intermediateContent, 
-  advancedContent,
+export default function ContentAccessController({
   requiredLevel = ACCESS_LEVELS.BASIC,
-  upgradeMessage = DEFAULT_UPGRADE_MESSAGE
-}) => {
-  // Get authentication context from AuthContext provider
-  const { currentUser, isAuthenticated, getAccessLevel } = useAuth();
+  isLoggedIn,
+  userAccessLevel,
+  basicContent,
+  content,
+  upgradeMessage,
+  children
+}) {
+  // Use auth context values or provided props
+  const auth = useAuth();
+  const effectiveIsLoggedIn = isLoggedIn ?? auth?.isAuthenticated ?? false;
   
-  // Get the user's current access level
-  // This will be 'basic', 'intermediate', or 'advanced'
-  const userAccessLevel = getAccessLevel ? getAccessLevel() : 
-                          (isAuthenticated() ? ACCESS_LEVELS.INTERMEDIATE : ACCESS_LEVELS.BASIC);
+  // Use provided userAccessLevel or fetch from auth context
+  const effectiveUserAccessLevel = 
+    userAccessLevel ?? 
+    auth?.userAccessLevel ?? 
+    (auth?.getAccessLevel?.() || ACCESS_LEVELS.BASIC);
   
-  // Convert access levels to numeric values for comparison
-  const userAccessValue = ACCESS_HIERARCHY[userAccessLevel];
-  const requiredAccessValue = ACCESS_HIERARCHY[requiredLevel];
-  
-  // Check if user can access the content (user level >= required level)
-  const canAccess = userAccessValue >= requiredAccessValue;
-  
-  // If user doesn't have access, show upgrade prompt
-  if (!canAccess) {
+  // Normalize required level (default to BASIC if invalid)
+  const normalizedRequiredLevel = 
+    Object.values(ACCESS_LEVELS).includes(requiredLevel) 
+      ? requiredLevel 
+      : ACCESS_LEVELS.BASIC;
+
+  // For development debugging only
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('ContentAccessController:', { 
+      requiredLevel: normalizedRequiredLevel, 
+      isLoggedIn: effectiveIsLoggedIn, 
+      userAccessLevel: effectiveUserAccessLevel
+    });
+  }
+
+  // BASIC content - accessible to everyone
+  if (normalizedRequiredLevel === ACCESS_LEVELS.BASIC) {
     return (
-      <div className="border border-gray-200 rounded-md p-6 text-center">
-        {/* Lock icon */}
-        <div className="mb-4">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </div>
-        
-        {/* Content locked message */}
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Content Locked</h3>
-        <p className="text-gray-500 mb-4">{upgradeMessage}</p>
-        
-        {/* Show different prompts based on user authentication status */}
-        {!isAuthenticated() ? (
-          // For unregistered users, show register/login options
-          <div className="space-y-2">
-            <Link to="/register">
-              <Button color="primary" fullWidth>Register for free</Button>
-            </Link>
-            <p className="text-sm text-gray-500">
-              Already have an account? <Link to="/login" className="text-primary-600">Sign in</Link>
-            </p>
-          </div>
-        ) : userAccessLevel === ACCESS_LEVELS.INTERMEDIATE ? (
-          // For registered free users, show upgrade option
-          <Link to="/pricing">
-            <Button color="primary" fullWidth>Upgrade Now</Button>
-          </Link>
-        ) : (
-          // For any other case (should rarely happen)
-          <p className="text-sm text-gray-500">
-            Please contact support if you believe you should have access to this content.
-          </p>
-        )}
+      children ??
+      (content && (
+        <div
+          className="prose max-w-none"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+        />
+      ))
+    );
+  }
+
+  // Not logged in users see login prompt for any gated content
+  if (!effectiveIsLoggedIn) {
+    // If basicContent is a string (HTML), sanitize it
+    const sanitizedBasicContent = typeof basicContent === 'string'
+      ? <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(basicContent) }} />
+      : basicContent;
+    
+    return sanitizedBasicContent || (
+      <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 my-4">
+        <h3 className="font-semibold text-primary-800 mb-1">Login Required</h3>
+        <p className="text-primary-700 mb-3">Please sign in to access this content.</p>
+        <Link 
+          to="/login" 
+          className="inline-flex items-center px-3 py-1.5 border border-primary-300 text-sm font-medium rounded-md text-primary-800 bg-primary-100 hover:bg-primary-200"
+        >
+          Sign In
+        </Link>
       </div>
     );
   }
-  
-  // If user has access, return the appropriate content based on access level
-  if (requiredLevel === ACCESS_LEVELS.ADVANCED && advancedContent) {
-    // Advanced content for premium users
-    return advancedContent;
-  } else if ((requiredLevel === ACCESS_LEVELS.INTERMEDIATE || userAccessLevel === ACCESS_LEVELS.INTERMEDIATE) 
-              && intermediateContent) {
-    // Intermediate content for registered users (or advanced users viewing intermediate content)
-    return intermediateContent;
-  } else {
-    // Basic content for everyone else
-    return basicContent;
-  }
-};
 
-export default ContentAccessController;
+  // For INTERMEDIATE content with logged-in users, show the content
+  if (normalizedRequiredLevel === ACCESS_LEVELS.INTERMEDIATE) {
+    return (
+      children ??
+      (content && (
+        <div
+          className="prose max-w-none"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+        />
+      ))
+    );
+  }
+
+  // For ADVANCED content with non-premium users
+  if (normalizedRequiredLevel === ACCESS_LEVELS.ADVANCED) {
+    if (effectiveUserAccessLevel !== ACCESS_LEVELS.ADVANCED) {
+      // If basicContent is a string (HTML), sanitize it
+      const sanitizedBasicContent = typeof basicContent === 'string'
+        ? <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(basicContent) }} />
+        : basicContent;
+      
+      return sanitizedBasicContent || (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 my-4">
+          <h3 className="font-semibold text-amber-800 mb-1">Premium Content</h3>
+          <p className="text-amber-700 mb-3">{upgradeMessage || DEFAULT_UPGRADE_MESSAGE}</p>
+          <Link 
+            to="/pricing" 
+            className="inline-flex items-center px-3 py-1.5 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-amber-100 hover:bg-amber-200"
+          >
+            Upgrade Subscription
+          </Link>
+        </div>
+      );
+    }
+    // Premium user with advanced content - fall through to show content
+  }
+
+  // Default case - show content
+  return (
+    children ??
+    (content && (
+      <div
+        className="prose max-w-none"
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+      />
+    ))
+  );
+}
+
+ContentAccessController.propTypes = {
+  requiredLevel: PropTypes.oneOf(Object.values(ACCESS_LEVELS)),
+  isLoggedIn: PropTypes.bool,
+  userAccessLevel: PropTypes.oneOf(Object.values(ACCESS_LEVELS)),
+  basicContent: PropTypes.node,
+  content: PropTypes.string,
+  upgradeMessage: PropTypes.string,
+  children: PropTypes.node
+};

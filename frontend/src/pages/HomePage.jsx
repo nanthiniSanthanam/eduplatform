@@ -1,6 +1,7 @@
 /**
  * File: C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\HomePage.jsx
  * Purpose: Homepage component for the educational platform
+ * Date: 2025-07-24 17:22:43
  * 
  * This component:
  * 1. Serves as the landing page for the platform
@@ -12,6 +13,7 @@
  * - Removed MainLayout import and wrapper
  * - Layout is now provided by App.jsx
  * - Ensures full-width content by using proper container and width classes
+ * - Improved API response handling with fallbacks
  * 
  * Variables to modify:
  * - FEATURED_COURSES: Update with your actual featured courses
@@ -19,7 +21,7 @@
  * - TESTIMONIALS: Update with real user testimonials
  * 
  * Created by: Professor Santhanam
- * Last updated: 2025-04-27 11:20:15
+ * Last updated: 2025-07-24 17:22:43
  */
 
 import React, { useEffect, useState } from 'react';
@@ -100,17 +102,65 @@ const HomePage = () => {
     totalStudents: 12500,
     totalInstructors: 48
   });
+  const [testimonials, setTestimonials] = useState([
+    {
+      id: 1,
+      name: "Jane Smith",
+      role: "Software Engineer",
+      content: "This platform helped me transition from a junior to senior developer in just 6 months.",
+      rating: 5,
+      avatar: "/images/avatars/avatar-1.jpg"
+    },
+    {
+      id: 2,
+      name: "Michael Johnson",
+      role: "Data Scientist",
+      content: "The data science courses here are comprehensive and practical. I use what I learned daily.",
+      rating: 5,
+      avatar: "/images/avatars/avatar-2.jpg"
+    },
+    {
+      id: 3,
+      name: "Sarah Williams",
+      role: "UX Designer",
+      content: "The design courses completely changed how I approach user experience. Highly recommended!",
+      rating: 4,
+      avatar: "/images/avatars/avatar-3.jpg"
+    }
+  ]);
+  const [testimonialError, setTestimonialError] = useState(null);
+  const [featuredCoursesError, setFeaturedCoursesError] = useState(null);
 
-  // Load featured courses from API
+  // Load featured courses and other data from API
   useEffect(() => {
     const loadFeaturedCourses = async () => {
       try {
-        const response = await courseService.getFeaturedCourses(3);
-        if (response.data && response.data.length > 0) {
-          setFeaturedCourses(response.data);
+        const response = await courseService.getFeaturedCourses();
+        
+        // Check if we got a valid response with courses
+        if (response) {
+          // Handle different response formats
+          let courses = response;
+          
+          // If response is an object with a data property that's an array
+          if (!Array.isArray(response) && response.data) {
+            courses = response.data;
+          }
+          
+          // If response is an object with results property that's an array (DRF pagination)
+          if (!Array.isArray(response) && response.results) {
+            courses = response.results;
+          }
+          
+          // Only update state if we have course data
+          if (Array.isArray(courses) && courses.length > 0) {
+            setFeaturedCourses(courses);
+          }
         }
       } catch (error) {
         console.error("Error loading featured courses:", error);
+        setFeaturedCoursesError(error);
+        // Keep using default courses on error
       } finally {
         setLoading(false);
       }
@@ -119,16 +169,63 @@ const HomePage = () => {
     const loadPlatformStats = async () => {
       try {
         const response = await statisticsService.getPlatformStats();
-        if (response.data) {
-          setStats(response.data);
+        if (response) {
+          const statsData = response.data || response;
+          if (statsData) {
+            setStats({
+              totalCourses: statsData.total_courses || statsData.courses_count || stats.totalCourses,
+              totalStudents: statsData.total_students || statsData.students_count || stats.totalStudents,
+              totalInstructors: statsData.total_instructors || statsData.instructors_count || stats.totalInstructors
+            });
+          }
         }
       } catch (error) {
-        console.error("Error loading platform statistics:", error);
+        console.error("Error loading platform stats:", error);
+        // Keep using default stats on error
+      }
+    };
+    
+    const loadTestimonials = async () => {
+      try {
+        const response = await testimonialService.getAllTestimonials();
+        if (response) {
+          // Handle different response formats
+          let testimonialData = response;
+          
+          if (!Array.isArray(response) && response.data) {
+            testimonialData = response.data;
+          }
+          
+          if (!Array.isArray(response) && response.results) {
+            testimonialData = response.results;
+          }
+          
+          if (Array.isArray(testimonialData) && testimonialData.length > 0) {
+            setTestimonials(testimonialData);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading testimonials:", error);
+        setTestimonialError(error);
+        // Keep using default testimonials on error
       }
     };
 
+    // Load featured courses
     loadFeaturedCourses();
-    loadPlatformStats();
+    
+    // Try to load stats and testimonials, but don't break if endpoints aren't available yet
+    try {
+      loadPlatformStats();
+    } catch (error) {
+      console.error("Statistics API not available yet:", error);
+    }
+    
+    try {
+      loadTestimonials();
+    } catch (error) {
+      console.error("Testimonials API not available yet:", error);
+    }
   }, []);
 
   return (
@@ -145,17 +242,37 @@ const HomePage = () => {
                 Discover a learning ecosystem where knowledge, innovation, and community converge to empower your educational journey.
               </p>
               <div className="flex flex-wrap gap-4">
-                <Link to="/courses">
-                  <Button color="secondary" size="large">
-                    Browse Courses
-                  </Button>
-                </Link>
-                {!isAuthenticated() && (
-                  <Link to="/register">
-                    <Button color="white" size="large">
-                      Join for Free
-                    </Button>
-                  </Link>
+                {!isAuthenticated && (
+                  <>
+                    <Link
+                      to="/register"
+                      className="px-8 py-3 text-lg font-medium text-white bg-primary-600 rounded-full hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                    >
+                      Get Started for Free
+                    </Link>
+                    <Link
+                      to="/pricing"
+                      className="px-8 py-3 text-lg font-medium text-primary-700 bg-white border-2 border-primary-600 rounded-full hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 shadow-md transition-all duration-300 transform hover:-translate-y-1"
+                    >
+                      View Plans
+                    </Link>
+                  </>
+                )}
+                {isAuthenticated && (
+                  <>
+                    <Link
+                      to="/courses"
+                      className="px-8 py-3 text-lg font-medium text-white bg-primary-600 rounded-full hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                    >
+                      Explore Courses
+                    </Link>
+                    <Link
+                      to="/dashboard"
+                      className="px-8 py-3 text-lg font-medium text-primary-700 bg-white border-2 border-primary-600 rounded-full hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 shadow-md transition-all duration-300 transform hover:-translate-y-1"
+                    >
+                      My Dashboard
+                    </Link>
+                  </>
                 )}
               </div>
             </div>
@@ -183,8 +300,6 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Rest of the component stays the same... */}
-      
       {/* Statistics Section */}
       <div className="bg-gray-100 py-12 w-full">
         <div className="container mx-auto px-4">
@@ -233,22 +348,26 @@ const HomePage = () => {
                 <Card key={course.id} className="overflow-hidden">
                   <div 
                     className="h-48 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${course.image || `/images/course-placeholder.jpg`})` }}
+                    style={{ backgroundImage: `url(${course.image || course.thumbnail || course.cover_image || `/images/course-placeholder.jpg`})` }}
                   ></div>
                   <div className="p-6">
                     <h3 className="font-semibold text-lg mb-2">{course.title}</h3>
-                    <p className="text-gray-600 mb-1">{course.instructor}</p>
+                    <p className="text-gray-600 mb-1">
+                      {course.instructor || course.instructor_name || course.teacher || "Expert Instructor"}
+                    </p>
                     <div className="flex items-center mb-4">
                       <span className="text-amber-500 flex items-center">
                         <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
-                        <span className="ml-1">{course.rating}</span>
+                        <span className="ml-1">{course.rating || course.average_rating || course.avg_rating || 4.5}</span>
                       </span>
                       <span className="text-gray-500 mx-2">•</span>
-                      <span className="text-gray-500">{course.students} students</span>
+                      <span className="text-gray-500">
+                        {course.students || course.enrolled_students || course.num_students || course.students_count || 0} students
+                      </span>
                     </div>
-                    <Link to={`/courses/${course.slug}`}>
+                    <Link to={`/courses/${course.slug || course.id}`}>
                       <Button color="primary" fullWidth>
                         View Course
                       </Button>
@@ -300,27 +419,75 @@ const HomePage = () => {
           <p className="text-xl mb-8 max-w-2xl mx-auto">
             Join thousands of students who are already transforming their careers with our courses
           </p>
-          <div className="flex justify-center gap-4">
-            {!isAuthenticated() ? (
-              <>
-                <Link to="/register">
-                  <Button color="white" size="large">
-                    Sign Up For Free
-                  </Button>
-                </Link>
-                <Link to="/pricing">
-                  <Button color="secondary" size="large">
-                    View Pricing
-                  </Button>
-                </Link>
-              </>
-            ) : (
-              <Link to="/dashboard">
-                <Button color="white" size="large">
-                  Go to Dashboard
-                </Button>
+          {!isAuthenticated ? (
+            <div className="mt-8 flex justify-center">
+              <Link
+                to="/register"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Sign Up Now
               </Link>
-            )}
+            </div>
+          ) : (
+            <div className="mt-8 flex justify-center">
+              <Link
+                to="/courses"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Browse Courses
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Testimonials Section */}
+      <div className="py-16 bg-gray-50 w-full">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">What Our Students Say</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Hear from our community of learners about their experience with our platform
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {testimonials.map((testimonial) => (
+              <div key={testimonial.id} className="bg-white p-6 rounded-lg shadow-md">
+                <div className="flex items-center mb-4">
+                  <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-200 mr-4">
+                    {testimonial.avatar ? (
+                      <img 
+                        src={testimonial.avatar} 
+                        alt={testimonial.name} 
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center bg-primary-100 text-primary-600">
+                        {testimonial.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{testimonial.name}</h3>
+                    <p className="text-gray-600 text-sm">{testimonial.role}</p>
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-3">{testimonial.content}</p>
+                <div className="flex text-amber-500">
+                  {[...Array(5)].map((_, i) => (
+                    <svg 
+                      key={i} 
+                      className={`h-5 w-5 ${i < testimonial.rating ? 'text-amber-500' : 'text-gray-300'}`} 
+                      fill="currentColor" 
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -1,6 +1,10 @@
 import React, { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 
+// fmt: off
+// isort: skip_file
+// Timestamp: 2024-07-07 - Fixed DOM property warnings in FormInput component
+
 const FormInput = forwardRef(({
   id,
   label,
@@ -20,8 +24,19 @@ const FormInput = forwardRef(({
   onRightIconClick,
   size = 'medium',
   variant = 'default',
+  multiline = false,
+  select = false,
+  fullWidth = false,
+  children,
+  rows = 4,
   ...props
 }, ref) => {
+  // Exclude helpText and other non-DOM props from being passed to the input element
+  const { 
+    helpText, 
+    ...inputProps 
+  } = props;
+
   // Size classes
   const sizeClasses = {
     small: 'py-1.5 px-3 text-sm',
@@ -48,9 +63,12 @@ const FormInput = forwardRef(({
   const hasRightIcon = !!rightIcon;
   const paddingLeftClass = hasLeftIcon ? 'pl-10' : '';
   const paddingRightClass = hasRightIcon ? 'pr-10' : '';
+  
+  // Width class
+  const widthClass = fullWidth ? 'w-full' : '';
 
   return (
-    <div className={`mb-4 ${className}`}>
+    <div className={`mb-4 ${className} ${widthClass}`}>
       {label && (
         <label htmlFor={id} className="block text-gray-700 font-medium mb-1">
           {label}
@@ -68,26 +86,70 @@ const FormInput = forwardRef(({
           </div>
         )}
         
-        <input
-          ref={ref}
-          id={id}
-          type={type}
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          placeholder={placeholder}
-          required={required}
-          className={`
-            w-full rounded-lg focus:outline-none transition-colors
-            ${sizeClasses[size] || sizeClasses.medium}
-            ${variantClasses[variant] || variantClasses.default}
-            ${stateClasses}
-            ${paddingLeftClass}
-            ${paddingRightClass}
-            ${inputClassName}
-          `}
-          {...props}
-        />
+        {multiline ? (
+          <textarea
+            ref={ref}
+            id={id}
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+            placeholder={placeholder}
+            required={required}
+            rows={rows}
+            className={`
+              w-full rounded-lg focus:outline-none transition-colors
+              ${sizeClasses[size] || sizeClasses.medium}
+              ${variantClasses[variant] || variantClasses.default}
+              ${stateClasses}
+              ${paddingLeftClass}
+              ${paddingRightClass}
+              ${inputClassName}
+            `}
+            {...inputProps}
+          />
+        ) : select ? (
+          <select
+            ref={ref}
+            id={id}
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+            required={required}
+            className={`
+              w-full rounded-lg focus:outline-none transition-colors
+              ${sizeClasses[size] || sizeClasses.medium}
+              ${variantClasses[variant] || variantClasses.default}
+              ${stateClasses}
+              ${paddingLeftClass}
+              ${paddingRightClass}
+              ${inputClassName}
+            `}
+            {...inputProps}
+          >
+            {children}
+          </select>
+        ) : (
+          <input
+            ref={ref}
+            id={id}
+            type={type}
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+            placeholder={placeholder}
+            required={required}
+            className={`
+              w-full rounded-lg focus:outline-none transition-colors
+              ${sizeClasses[size] || sizeClasses.medium}
+              ${variantClasses[variant] || variantClasses.default}
+              ${stateClasses}
+              ${paddingLeftClass}
+              ${paddingRightClass}
+              ${inputClassName}
+            `}
+            {...inputProps}
+          />
+        )}
         
         {hasRightIcon && (
           <div 
@@ -111,7 +173,7 @@ const FormInput = forwardRef(({
 FormInput.displayName = 'FormInput';
 
 FormInput.propTypes = {
-  id: PropTypes.string.isRequired,
+  id: PropTypes.string,
   label: PropTypes.string,
   type: PropTypes.string,
   placeholder: PropTypes.string,
@@ -129,6 +191,11 @@ FormInput.propTypes = {
   onRightIconClick: PropTypes.func,
   size: PropTypes.oneOf(['small', 'medium', 'large']),
   variant: PropTypes.oneOf(['default', 'filled', 'outlined']),
+  multiline: PropTypes.bool,
+  select: PropTypes.bool,
+  fullWidth: PropTypes.bool,
+  children: PropTypes.node,
+  rows: PropTypes.number
 };
 
 export default FormInput;

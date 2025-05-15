@@ -1,29 +1,32 @@
 /**
  * File: frontend/src/App.jsx
- * Purpose: Main application component that defines all routes
+ * Version: 2.2.0
+ * Date: 2025-05-11 16:41:04
+ * Author: cadsanthanam
+ * 
+ * Enhanced Main Application Component with Improved Content Access Control
+ * 
+ * Key Improvements:
+ * 1. Support for both ID and slug-based course routes
+ * 2. Integration with authPersist for reliable authentication
+ * 3. More consistent route naming patterns
+ * 4. Enhanced protected route implementation
+ * 5. Better organization of route groups
+ * 6. Consistent role checks for admin/instructor routes
+ * 7. Smart content access control for tiered educational content
  * 
  * This component:
  * 1. Sets up routing for the entire application
  * 2. Defines access control for routes based on authentication and subscription
  * 3. Integrates with AuthContext for user management
- * 
- * Updates:
- * - Added content access level routes
- * - Added subscription-related routes
- * - Added certificate routes for paid users
- * - Fixed missing imports for subscription and certificate pages
- * 
- * Variables to modify:
- * None - routes are configured based on authentication state and roles
+ * 4. Implements tiered content access (basic/intermediate/advanced)
  * 
  * Route Access Levels:
  * - Public routes: Accessible to all users (homepage, about, login, register)
  * - Protected routes: Require basic authentication (course content, profile)
  * - Role-specific routes: Require specific user roles (admin dashboard, instructor dashboard)
  * - Subscription routes: Require premium subscription (certificates)
- * 
- * Created by: Professor Santhanam
- * Last updated: 2025-04-27, 16.08 pm
+ * - Tiered content routes: Access based on content level and user status
  */
 
 import React from 'react';
@@ -51,6 +54,12 @@ import CourseContentPage from './pages/courses/CourseContentPage';
 import AssessmentPage from './pages/courses/AssessmentPage';
 import CoursesListPage from './pages/courses/CoursesListPage';
 import CreateLessonPage from './pages/courses/CreateLessonPage';
+import InstructorCourseDetailPage from './pages/courses/InstructorCourseDetailPage';
+import CreateModulePage from './pages/courses/CreateModulePage';
+import CreateCoursePage from './pages/instructor/CreateCoursePage';
+import CourseWizard from './pages/instructor/CourseWizard';
+import EditCoursePage from './pages/instructor/EditCoursePage';
+
 // Dashboard Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StudentDashboard from './pages/dashboard/StudentDashboard';
@@ -68,8 +77,9 @@ import SubscriptionSuccessPage from './pages/subscription/SubscriptionSuccessPag
 // Certificate Pages
 import CertificatePage from './pages/certificates/CertificatePage';
 
-// Protected Route Component
+// Route Components
 import ProtectedRoute from './components/routes/ProtectedRoute';
+import CourseContentRouteChecker from './components/routes/CourseContentRouteChecker';
 
 // Styles
 import './Index.css';
@@ -86,10 +96,13 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-          <Route path="/verify-email/:token?" element={<VerifyEmailPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           
           {/* Course Landing Pages - Public but with tiered content */}
           <Route path="/courses/:courseSlug" element={<MainLayout><CourseLandingPage /></MainLayout>} />
+          
+          {/* Module Detail Page - Public view for browsing course structure */}
+          <Route path="/courses/:courseSlug/modules/:moduleId" element={<MainLayout><CourseContentPage previewMode={true} /></MainLayout>} />
           
           {/* Subscription Plans - Public but with auth redirects */}
           <Route path="/pricing" element={<MainLayout><PricingPage /></MainLayout>} />
@@ -113,23 +126,10 @@ function App() {
             } 
           />
           
-          {/* Course Content - Requires authentication with content tiering */}
+          {/* Course Content - Smart access control based on content tier */}
           <Route 
             path="/courses/:courseSlug/content/:moduleId/:lessonId" 
-            element={
-              <ProtectedRoute requireEmailVerified={true}>
-                <MainLayout><CourseContentPage /></MainLayout>
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-          path="/courses/:courseSlug/modules/:moduleId/lessons/create" 
-          element={
-            <ProtectedRoute requiredRole="instructor">
-            <CreateLessonPage />
-           </ProtectedRoute>
-          } 
+            element={<CourseContentRouteChecker />} 
           />
           
           <Route 
@@ -156,12 +156,10 @@ function App() {
             path="/courses" 
             element={
               <ProtectedRoute>
-                <CoursesListPage />
+                <MainLayout><CoursesListPage /></MainLayout>
               </ProtectedRoute>
             } 
           />
-
-
 
           {/* Role-Specific Dashboards */}
           <Route 
@@ -176,7 +174,7 @@ function App() {
           <Route 
             path="/instructor/dashboard" 
             element={
-              <ProtectedRoute requiredRoles={['instructor']}>
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
                 <MainLayout><InstructorDashboard /></MainLayout>
               </ProtectedRoute>
             } 
@@ -209,6 +207,105 @@ function App() {
                 <MainLayout>
                   <CertificatePage />
                 </MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Instructor Course Management - Support for both ID and slug-based routes */}
+          
+          {/* Course Creation */}
+          <Route 
+            path="/instructor/create-course" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateCoursePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/instructor/courses/new" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateCoursePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Course Wizard - Supports both new courses and editing by slug */}
+          <Route 
+            path="/instructor/courses/wizard" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CourseWizard /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/instructor/courses/wizard/:courseSlug" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CourseWizard /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Course Details - Support both slug and ID-based routes */}
+          <Route 
+            path="/instructor/courses/:courseIdentifier" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><InstructorCourseDetailPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Course Editing - Support both slug and ID-based routes */}
+          <Route 
+            path="/instructor/courses/:courseIdentifier/edit" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><EditCoursePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Course Management - Using more descriptive slug-based URL parameter */}
+          <Route 
+            path="/instructor/courses/:courseIdentifier/manage" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><InstructorCourseDetailPage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Module Creation */}
+          <Route 
+            path="/instructor/courses/:courseIdentifier/modules/new" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateModulePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Legacy routes that use slug format - keep for backward compatibility */}
+          <Route 
+            path="/courses/:courseSlug/modules/create" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateModulePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/courses/:courseSlug/modules/:moduleId/lessons/create" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateLessonPage /></MainLayout>
               </ProtectedRoute>
             } 
           />

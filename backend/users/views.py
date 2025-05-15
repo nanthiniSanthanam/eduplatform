@@ -26,6 +26,11 @@ Connected files:
 2. backend/users/models.py - User, Profile, and Subscription models
 3. backend/users/permissions.py - Custom permission classes
 4. frontend/src/contexts/AuthContext.jsx - Consumes these API endpoints
+
+Changes (2025-05-05):
+- Fixed RegisterView.create() to explicitly create an EmailVerification record 
+  instead of trying to retrieve a non-existent record
+- This resolves the 500 error during user registration
 """
 
 from rest_framework import generics, status, views, viewsets, permissions
@@ -78,25 +83,48 @@ class RegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        if not serializer.is_valid():
+            # Return validation errors in a consistent format
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Get the latest verification token for this user
-        verification = EmailVerification.objects.filter(
-            user=user,
-            is_used=False
-        ).latest('created_at')
+        try:
+            user = serializer.save()
 
-        # Create default subscription (free tier)
-        Subscription.create_for_user(user)
+            # Create an email verification token for the new user
+            token = uuid.uuid4()
+            expiry = timezone.now() + timedelta(hours=EMAIL_VERIFICATION_EXPIRY_HOURS)
+            verification = EmailVerification.objects.create(
+                user=user,
+                token=token,
+                expires_at=expiry
+            )
 
-        # Send verification email
-        self._send_verification_email(user, verification.token)
+            # Create default subscription (free tier)
+            Subscription.create_for_user(user)
 
-        return Response(
-            {"detail": "User registered successfully. Please check your email to verify your account."},
-            status=status.HTTP_201_CREATED
-        )
+            # Send verification email
+            try:
+                self._send_verification_email(user, verification.token)
+            except Exception as e:
+                logger.error(
+                    f"Failed to send verification email to {user.email}: {str(e)}")
+                # Continue with registration even if email fails
+                # We'll let the user request a new verification link
+
+            # Return success response
+            return Response(
+                {"detail": "User registered successfully. Please check your email to verify your account."},
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            logger.error(f"Error during registration: {str(e)}")
+            return Response(
+                {"detail": "An error occurred during registration. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def _send_verification_email(self, user, token):
         """
@@ -105,11 +133,31 @@ class RegisterView(generics.CreateAPIView):
         try:
             verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
             subject = "Verify your EduPlatform account"
-            message = render_to_string('users/email_verification.html', {
-                'user': user,
-                'verification_url': verification_url,
-                'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
-            })
+
+            # Ensure the template exists
+            try:
+                message = render_to_string('users/email_verification.html', {
+                    'user': user,
+                    'verification_url': verification_url,
+                    'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
+                })
+            except Exception as e:
+                logger.error(f"Error rendering email template: {str(e)}")
+                # Fallback to plain text if template fails
+                message = f"""
+                Hello {user.first_name},
+                
+                Thank you for registering with EduPlatform. Please verify your email by clicking the link below:
+                
+                {verification_url}
+                
+                This link is valid for {EMAIL_VERIFICATION_EXPIRY_HOURS} hours.
+                
+                If you didn't register for an account, please ignore this email.
+                
+                Best regards,
+                The EduPlatform Team
+                """
 
             send_mail(
                 subject,
@@ -117,12 +165,13 @@ class RegisterView(generics.CreateAPIView):
                 settings.DEFAULT_FROM_EMAIL,
                 [user.email],
                 fail_silently=False,
-                html_message=message
+                html_message=message if '<html' in message else None
             )
 
             logger.info(f"Verification email sent to {user.email}")
         except Exception as e:
             logger.error(f"Failed to send verification email: {str(e)}")
+            raise
 
 
 class LoginView(views.APIView):
@@ -153,20 +202,23 @@ class LoginView(views.APIView):
         if not remember_me:
             refresh.set_exp(lifetime=timedelta(hours=24))
 
-        # Create or update user session
+        # Get client information
         ip_address = self._get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
-        # Set session expiry time
+        # Set session expiry time based on remember_me
         if remember_me:
             expires_at = timezone.now() + timedelta(days=30)
         else:
             expires_at = timezone.now() + timedelta(hours=24)
 
-        # Create user session
+        # ---- single, canonical session row using JTI ----
+        # Create single user session with JTI (JSON Web Token ID)
+        # This is required for CustomJWTAuthentication to validate the token
         UserSession.objects.create(
             user=user,
-            session_key=refresh.access_token,
+            # Store JTI (token ID), not the encoded token
+            session_key=refresh.access_token['jti'],
             ip_address=ip_address,
             user_agent=user_agent,
             expires_at=expires_at,
@@ -182,9 +234,9 @@ class LoginView(views.APIView):
 
         # Return authentication tokens
         data = {
-            'user': UserDetailSerializer(user, context={'request': request}).data,
-            'refresh': str(refresh),
             'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserDetailSerializer(user, context={'request': request}).data,
         }
 
         return Response(data, status=status.HTTP_200_OK)
@@ -237,24 +289,42 @@ class LogoutView(views.APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            # Invalidate the current session
-            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-            if 'Bearer ' in auth_header:
-                token = auth_header.split(' ')[1]
+            # Try to find and invalidate session using JTI from token payload
+            jti = None
+            if hasattr(request, 'auth') and hasattr(request.auth, 'payload'):
+                jti = request.auth.payload.get('jti')
+
+            if jti:
+                # First try to find session by JTI
                 sessions = UserSession.objects.filter(
                     user=request.user,
-                    session_key=token,
+                    session_key=jti,
                     is_active=True
                 )
                 for session in sessions:
                     session.invalidate()
+                    logger.info(f"Invalidated session by JTI: {jti}")
+            else:
+                # Fallback to encoded token if JTI not found
+                auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+                if 'Bearer ' in auth_header:
+                    token = auth_header.split(' ')[1]
+                    sessions = UserSession.objects.filter(
+                        user=request.user,
+                        session_key=token,
+                        is_active=True
+                    )
+                    for session in sessions:
+                        session.invalidate()
+                        logger.info(f"Invalidated session by encoded token")
 
-            # If refresh token is provided, add it to blacklist
+            # Handle refresh token blacklisting if provided
             refresh_token = request.data.get('refresh')
             if refresh_token:
                 try:
                     token = RefreshToken(refresh_token)
                     token.blacklist()
+                    logger.info("Blacklisted refresh token")
                 except Exception as e:
                     logger.warning(f"Error blacklisting token: {str(e)}")
 
@@ -331,10 +401,30 @@ class PasswordChangeView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        # Optional: Invalidate other sessions
-        UserSession.objects.filter(user=request.user).exclude(
-            session_key=request.auth.token
-        ).update(is_active=False)
+        # Get the current session key to preserve (prefer JTI over encoded token)
+        current_session_key = None
+
+        # First try to get JTI from payload
+        if hasattr(request, 'auth') and hasattr(request.auth, 'payload'):
+            jti = request.auth.payload.get('jti')
+            if jti:
+                current_session_key = jti
+                logger.info(f"Using JTI as session key: {jti}")
+
+        # Fallback to encoded token if JTI not available
+        if not current_session_key and hasattr(request.auth, 'token'):
+            current_session_key = request.auth.token
+            logger.info("Using encoded token as session key")
+
+        # Invalidate all other sessions except current one
+        if current_session_key:
+            UserSession.objects.filter(user=request.user).exclude(
+                session_key=current_session_key
+            ).update(is_active=False)
+            logger.info(f"Invalidated other sessions during password change")
+        else:
+            logger.warning(
+                "Could not identify current session during password change")
 
         return Response(
             {"detail": "Password changed successfully."},
@@ -568,11 +658,31 @@ class ResendVerificationView(generics.GenericAPIView):
         try:
             verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
             subject = "Verify your EduPlatform account"
-            message = render_to_string('users/email_verification.html', {
-                'user': user,
-                'verification_url': verification_url,
-                'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
-            })
+
+            # Ensure the template exists
+            try:
+                message = render_to_string('users/email_verification.html', {
+                    'user': user,
+                    'verification_url': verification_url,
+                    'valid_hours': EMAIL_VERIFICATION_EXPIRY_HOURS,
+                })
+            except Exception as e:
+                logger.error(f"Error rendering email template: {str(e)}")
+                # Fallback to plain text if template fails
+                message = f"""
+                Hello {user.first_name},
+                
+                Thank you for registering with EduPlatform. Please verify your email by clicking the link below:
+                
+                {verification_url}
+                
+                This link is valid for {EMAIL_VERIFICATION_EXPIRY_HOURS} hours.
+                
+                If you didn't register for an account, please ignore this email.
+                
+                Best regards,
+                The EduPlatform Team
+                """
 
             send_mail(
                 subject,
@@ -580,12 +690,13 @@ class ResendVerificationView(generics.GenericAPIView):
                 settings.DEFAULT_FROM_EMAIL,
                 [user.email],
                 fail_silently=False,
-                html_message=message
+                html_message=message if '<html' in message else None
             )
 
             logger.info(f"Verification email sent to {user.email}")
         except Exception as e:
             logger.error(f"Failed to send verification email: {str(e)}")
+            raise
 
 
 class UserSessionViewSet(viewsets.ModelViewSet):

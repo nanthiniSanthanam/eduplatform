@@ -31,7 +31,11 @@ import Tooltip from './Tooltip';
 import AnimatedElement from './AnimatedElement';
 import Certificate from './Certificate';
 import Container from './Container'; 
-
+import LoadingScreen from './LoadingScreen';
+import ResumeButton from './ResumeButton';
+import BookmarksList from './BookmarksList';
+import Spinner from './Spinner';
+import ErrorBoundary from './ErrorBoundary';
 // Form Elements
 import FormInput from './FormInput';
 
@@ -39,6 +43,15 @@ import FormInput from './FormInput';
 import Modal from './Modal';
 import Tabs from './Tabs';
 import Accordion from './Accordion';
+import StepIndicator from './StepIndicator';
+import TagInput from './TagInput';
+import ResourceCard from './ResourceCard';
+import SearchBar from './SearchBar';
+import Sidebar from './Sidebar';
+import ContentAccessController from './ContentAccessController';
+import Dropdown from './Dropdown';
+import Pagination from './Pagination';
+import ProfileBadge from './ProfileBadge';
 
 // Export individual components
 export {
@@ -57,26 +70,39 @@ export {
   Tooltip,
   AnimatedElement,
   Certificate,
+  LoadingScreen,
+  ResumeButton,
+  BookmarksList,
+  Spinner,
+  ErrorBoundary,
   
   // Form Elements
   FormInput,
+  TagInput,
   
   // Layout Components
   Modal,
   Tabs,
-  Accordion
+  Accordion,
+  StepIndicator,
+  ResourceCard,
+  SearchBar,
+  Sidebar,
+  ContentAccessController,
+  Dropdown,
+  Pagination,
+  ProfileBadge
 };
 
 // Export utility functions
-    export const getInitials = (name) => {
-    if (!name) return '';
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase();
-
-    };
+export const getInitials = (name) => {
+  if (!name) return '';
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase();
+};
 
 /**
  * Usage examples:
@@ -90,3 +116,36 @@ export {
  * 3. Import with alias:
  *    import { Button as CustomButton } from '../components/common';
  */
+
+export default {
+  Alert,
+  AnimatedElement,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Container,
+  ContentAccessController,
+  Dropdown,
+  ErrorBoundary,
+  FormInput,
+  LoadingScreen,
+  Modal,
+  Pagination,
+  ProfileBadge,
+  ProgressBar,
+  Rating,
+  ResourceCard,
+  SearchBar,
+  Sidebar,
+  Skeleton,
+  Spinner,
+  TagInput,
+  Tabs,
+  Accordion,
+  StepIndicator,
+  TextSkeleton,
+  CardSkeleton,
+  Tooltip,
+  Certificate
+};

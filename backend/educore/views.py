@@ -4,56 +4,74 @@ from rest_framework.response import Response
 from django.db import connections
 from django.db.utils import OperationalError, ProgrammingError
 import time
+from django.shortcuts import render
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+import os
 
 
 @api_view(['GET'])
 def db_status(request):
-    """Return database connection status."""
+    """Simple view to check database connectivity"""
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute("SELECT 1")
-            return Response({"status": "connected"})
-    except (OperationalError, ProgrammingError):
-        return Response({"status": "disconnected"}, status=503)
+            row = cursor.fetchone()
+            if row[0] == 1:
+                return JsonResponse({"status": "ok", "message": "Database connection successful"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+    return JsonResponse({"status": "error", "message": "Database connection failed"}, status=500)
 
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def db_stats(request):
-    """Return database statistics for admin users."""
+    """View to get basic database statistics"""
     try:
         stats = {}
         with connections['default'].cursor() as cursor:
-            # Database size
+            # Get total tables
             cursor.execute(
-                "SELECT pg_size_pretty(pg_database_size(current_database()))")
-            stats['database_size'] = cursor.fetchone()[0]
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'")
+            stats['total_tables'] = cursor.fetchone()[0]
 
-            # Connection count
-            cursor.execute("""
-                SELECT count(*) FROM pg_stat_activity
-                WHERE datname = current_database()
-            """)
-            stats['active_connections'] = cursor.fetchone()[0]
-
-            # Table statistics
-            cursor.execute("""
-                SELECT relname, n_live_tup, pg_size_pretty(pg_relation_size(quote_ident(relname)::text))
-                FROM pg_stat_user_tables
-                ORDER BY n_live_tup DESC
-                LIMIT 10
-            """)
-            tables = cursor.fetchall()
-            stats['tables'] = [
-                {
-                    'name': table[0],
-                    'rows': table[1],
-                    'size': table[2]
-                }
-                for table in tables
-            ]
-
-            return Response(stats)
-
+        return JsonResponse({"status": "ok", "stats": stats})
     except Exception as e:
-        return Response({"error": str(e)}, status=500)
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def test_static(request):
+    """Simple view to test static files"""
+    return HttpResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Static Files Test</title>
+        <link rel="stylesheet" type="text/css" href="/static/test/test.css">
+    </head>
+    <body>
+        <h1>Testing Static Files</h1>
+        <p>If this page has a red background, static files are working.</p>
+    </body>
+    </html>
+    """)
+
+
+def test_admin_static(request):
+    """Simple view to test admin static files"""
+    return HttpResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Static Files Test</title>
+        <link rel="stylesheet" type="text/css" href="/static/admin/css/base.css">
+    </head>
+    <body>
+        <h1>Testing Admin Static Files</h1>
+        <p>If this page has admin styling, admin static files are working.</p>
+    </body>
+    </html>
+    """)

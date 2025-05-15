@@ -1,0 +1,8 @@
+psql -h localhost -p 5432 -U eduplatform_user -d eduplatform
+Vajjiram@79
+
+cd backend && venv\scripts\activate && python manage.py runserver --settings=educore.settings_local_prod
+
+python manage.py runserver --settings=educore.settings_local_prod
+
+cd frontend && npm run dev

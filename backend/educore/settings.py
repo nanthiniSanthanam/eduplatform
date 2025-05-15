@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import timedelta
 from .db_settings import *
 from dotenv import load_dotenv
+import mimetypes
 
 load_dotenv()
 
@@ -45,18 +46,20 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_extensions',
+    'debug_toolbar',
     # Local apps
     'users',
     'courses',
     'instructor_portal',
-
-
+    'content',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -64,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
 ]
 
 ROOT_URLCONF = 'educore.urls'
@@ -78,6 +82,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.static',
             ],
         },
     },
@@ -128,8 +133,22 @@ CURRENCY_SYMBOL = '₹'
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'staticfiles'),
+]
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
+# Simplify static files handling for development
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = True
+WHITENOISE_MANIFEST_STRICT = False
+
+# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
@@ -151,10 +170,23 @@ REST_FRAMEWORK = {
     ],
 }
 
+# REST Framework settings - Updated to prioritize JWT Authentication
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        # Allow unauthenticated users to read, but not write
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+}
+
 # Add this configuration block, typically after REST_FRAMEWORK settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    # Matches authPersist default
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    # Extended for better user experience
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
@@ -176,12 +208,37 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# Add these critical CORS settings for authentication
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 # Custom user model
 AUTH_USER_MODEL = 'users.CustomUser'
 
 # Email verification settings
 ACCOUNT_EMAIL_VERIFICATION = True
 EMAIL_VERIFICATION_TIMEOUT_DAYS = 2  # Days
+
+# Frontend URL for redirects
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
 LOGGING = {
     'version': 1,
@@ -198,3 +255,16 @@ LOGGING = {
         },
     },
 }
+
+# Add these lines to settings.py
+# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.StaticFilesStorage'  # Use simpler storage
+
+# Add proper MIME types
+mimetypes.add_type("text/css", ".css", True)
+mimetypes.add_type("text/javascript", ".js", True)
+
+# Debug Toolbar settings
+INTERNAL_IPS = [
+    '127.0.0.1',
+]

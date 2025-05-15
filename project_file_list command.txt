@@ -9,6 +9,8 @@ Get-ChildItem -Recurse -Force |
   Where-Object {
     $_.FullName      -notlike '*\frontend\node_modules\*' -and
     $_.FullName      -notlike '*\venv\*'                  -and
+    $_.FullName      -notlike '*\backend\static\*'        -and
+    $_.FullName      -notlike '*\backend\staticfiles\*'   -and
     $_.FullName      -notlike '*\logs\*'                  -and
     $_.FullName      -notlike '*\dist\*'                  -and
     $_.FullName      -notlike '*\dist-ssr\*'              -and

@@ -58,8 +58,8 @@ const CoursesListPage = () => {
           categoryService.getAllCategories()
         ]);
         
-        setCourses(coursesResponse.data);
-        setCategories(categoriesResponse.data);
+        setCourses(coursesResponse);
+        setCategories(categoriesResponse);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load courses. Please try again.');

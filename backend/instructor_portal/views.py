@@ -65,12 +65,17 @@ class InstructorCourseViewSet(viewsets.ModelViewSet):
     """
     serializer_class = InstructorCourseSerializer
     permission_classes = [IsInstructorOrAdmin]
+    lookup_field = 'slug'  # Use slug for lookups instead of pk
 
     def get_queryset(self):
         # Return only courses where the user is an instructor
-        if self.request.user.role == 'administrator' or self.request.user.is_staff:
+        user = self.request.user
+        print(f"InstructorCourseViewSet.get_queryset: User {user}")
+
+        if user.role == 'administrator' or user.is_staff:
             return Course.objects.all()
-        return Course.objects.filter(instructors__instructor=self.request.user)
+
+        return Course.objects.filter(instructors__instructor=user)
 
     def perform_create(self, serializer):
         # Automatically add the current user as an instructor
@@ -80,6 +85,50 @@ class InstructorCourseViewSet(viewsets.ModelViewSet):
             instructor=self.request.user,
             is_lead=True
         )
+
+    @action(detail=True, methods=['get'])
+    def modules(self, request, slug=None):
+        """Get all modules for a specific course"""
+        course = self.get_object()
+        modules = Module.objects.filter(course=course).order_by('order')
+        serializer = InstructorModuleSerializer(modules, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['put'])
+    def publish(self, request, slug=None):
+        """Publish or unpublish a course"""
+        course = self.get_object()
+        should_publish = request.data.get('publish', True)
+
+        # Check if course has enough content to be published
+        if should_publish:
+            # Validate course has required components
+            modules_count = course.modules.count()
+            if modules_count == 0:
+                return Response(
+                    {"detail": "Course needs at least one module to be published."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if at least one module has lessons
+            has_lessons = False
+            for module in course.modules.all():
+                if module.lessons.count() > 0:
+                    has_lessons = True
+                    break
+
+            if not has_lessons:
+                return Response(
+                    {"detail": "Course needs at least one lesson to be published."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Update published status
+        course.is_published = should_publish
+        course.save()
+
+        serializer = self.get_serializer(course)
+        return Response(serializer.data)
 
 
 class InstructorModuleViewSet(viewsets.ModelViewSet):

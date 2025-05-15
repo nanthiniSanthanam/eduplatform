@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+EduPlatform Project Rules (for AI/Dev/Chat Context)
+Full-Stack Integrity:
+Always check and maintain consistency between frontend forms, API services, backend models, serializers, views, and database fields for every feature or change.
+Data Flow Awareness:
+For any new or modified form, ensure the data flow is correct and complete:
+Frontend Form → API Service → Backend Serializer/Model → Database
+And for display: Database → Backend Serializer/View → API Service → Frontend Page
+Field Matching:
+All form fields must match backend requirements (name, type, required/optional, value format).
+Use IDs for foreign keys (e.g., category_id), not names or objects, unless the backend expects otherwise.
+Error Handling:
+Add defensive checks for undefined/null data at every step.
+Show user-friendly error messages for all API or validation errors.
+Role & Access Control:
+Always enforce and check user roles (student, instructor, admin) for protected routes and actions.
+API/Model Changes:
+Any change to backend models, serializers, or endpoints must be reflected in all connected frontend code and vice versa.
+Testing & Navigation:
+After any change, test the full navigation and data flow for both creation and display (for all user roles).
+Documentation:
+Add a timestamp and a brief comment at the top of every file you modify or create, describing the change.
+Environment:
+Always ensure the backend is running in the correct virtual environment (venv).
+Linter & Naming:
+
+Fix linter errors, especially those related to import casing and file naming, to avoid cross-platform issues.

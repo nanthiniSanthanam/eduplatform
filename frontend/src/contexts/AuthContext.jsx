@@ -1,231 +1,301 @@
 /**
  * File: frontend/src/contexts/AuthContext.jsx
- * Purpose: Authentication context provider for JWT-based user authentication with subscription management
+ * Version: 3.2.0
+ * Date: 2025-08-13 08:21:36
+ * Author: nanthiniSanthanam
+ * 
+ * Enhanced Authentication Context with Improved Session Persistence
+ * 
+ * Key Improvements:
+ * 1. Uses authPersist utility for robust token management
+ * 2. Implements automatic token refresh
+ * 3. Handles session expiration gracefully
+ * 4. Provides role-based session durations (longer for instructors)
+ * 5. Optimized for frequent API operations in instructor workflows
  * 
  * This context provides:
- * 1. User authentication state management
- * 2. Login/logout functionality with JWT token handling
- * 3. User registration and profile management
- * 4. Role-based access control functions
- * 5. Email verification status tracking
- * 6. Subscription management for tiered access
- * 7. Access level determination (basic, intermediate, advanced)
- * 
- * Modifications for tiered access:
- * 1. Added subscription state to track user's subscription tier
- * 2. Added getAccessLevel function to determine content access level
- * 3. Added subscription management functions (upgrade, cancel)
- * 4. Added isSubscriber helper function
- * 5. Connected to subscription endpoints in API
- * 
- * Access Levels:
- * - Unregistered users: basic access
- * - Registered users: intermediate access
- * - Paid users: intermediate (basic tier) or advanced (premium tier) access
+ * - User authentication state management
+ * - Login/logout functionality with persistent JWT tokens
+ * - Role-based access control functions
+ * - Subscription management for tiered access
+ * - Automatic token refresh to maintain sessions
  * 
  * Usage:
- * const { currentUser, subscription, getAccessLevel, isSubscriber, upgradeSubscription } = useAuth();
- * 
- * Variables to modify:
- * - ACCESS_LEVEL_MAP: Change this if you want to modify how subscription tiers map to access levels
- * 
- * Backend Connection Points:
- * - POST /api/token/ - Get JWT tokens
- * - POST /api/token/refresh/ - Refresh JWT tokens
- * - POST /api/users/register/ - Register new users
- * - GET /api/users/me/ - Get current user profile
- * - POST /api/users/verify-email/ - Verify user email
- * - GET /api/users/subscription/current/ - Get current subscription
- * - POST /api/users/subscription/upgrade/ - Upgrade subscription
- * - POST /api/users/subscription/cancel/ - Cancel subscription
- * 
- * @author nanthiniSanthanam
- * @version 2.1
+ * const { currentUser, isAuthenticated, login, logout } = useAuth();
  */
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { authService, subscriptionService } from '../services/api';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import authPersist from '../utils/authPersist';
 
-// Map subscription tiers to access levels
-const ACCESS_LEVEL_MAP = {
-  'free': 'intermediate',  // Free registered users get intermediate access
-  'registered': 'intermediate',  // Registered users get intermediate access
-  'basic': 'intermediate',  // Basic paid tier also gets intermediate access
-  'premium': 'advanced'    // Premium paid tier gets advanced access
+// Create the auth context
+const AuthContext = createContext();
+
+export const useAuth = () => {
+  return useContext(AuthContext);
 };
 
-// Create context
-const AuthContext = createContext(null);
+// Helper function to retrieve token regardless of naming convention (access or token)
+const getStoredToken = () => {
+  return authPersist.getValidToken();  // getValidToken already handles all cases
+};
 
 export const AuthProvider = ({ children }) => {
+  // State for user data and authentication status
   const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [accessLevel, setAccessLevel] = useState('basic');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // New state for subscription
-  const [subscription, setSubscription] = useState({
-    tier: 'free',
-    status: 'active',
-    isActive: true,
-    daysRemaining: 0
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
-  // Load user on mount and set up token refresh
+  // Access level mapping
+  const ACCESS_LEVEL_MAP = {
+    'free': 'basic',       // FIXED: free users have basic access 
+    'registered': 'basic', // FIXED: registered users have basic access
+    'basic': 'basic',      // FIXED: consistent naming
+    'premium': 'advanced'  // Advanced still aligns with premium
+  };
+
+  // Check for existing valid token on mount
   useEffect(() => {
-    const loadUser = async () => {
-      if (authService.isAuthenticated()) {
-        try {
-          // Try to get the current user with the stored token
-          const response = await authService.getCurrentUser();
-          setCurrentUser(response.data);
+    const checkExistingAuth = async () => {
+      try {
+        setLoading(true);
+        
+        // Check if we have a valid token
+        if (authPersist.isTokenValid()) {
+          // Get stored user data
+          const userData = authPersist.getUserData();
           
-          // Get subscription information if authenticated
-          try {
-            const subscriptionResponse = await subscriptionService.getCurrentSubscription();
-            setSubscription({
-              tier: subscriptionResponse.data.tier || 'free',
-              status: subscriptionResponse.data.status || 'active',
-              isActive: subscriptionResponse.data.is_active !== false,
-              daysRemaining: subscriptionResponse.data.days_remaining || 0,
-              endDate: subscriptionResponse.data.end_date || null
-            });
-          } catch (subErr) {
-            console.error('Error loading subscription:', subErr);
-            // Set default subscription if can't load
-            setSubscription({
-              tier: 'free',
-              status: 'active',
-              isActive: true,
-              daysRemaining: 0
-            });
-          }
-          
-          // Set up token refresh interval
-          // Refresh token before it expires (e.g., every 25 minutes for 30 min tokens)
-          const refreshInterval = setInterval(() => {
-            authService.refreshToken()
-              .catch(err => {
-                console.error('Token refresh failed:', err);
-                // If refresh fails, log the user out
-                authService.logout();
-                setCurrentUser(null);
-                setSubscription({
-                  tier: 'free',
-                  status: 'active',
-                  isActive: true,
-                  daysRemaining: 0
-                });
-                clearInterval(refreshInterval);
-              });
-          }, 25 * 60 * 1000); // 25 minutes
-          
-          // Clean up interval on unmount
-          return () => clearInterval(refreshInterval);
-        } catch (err) {
-          console.error('Error loading user:', err);
-          // Token might be invalid or expired, try to refresh it
-          try {
-            await authService.refreshToken();
-            const retryResponse = await authService.getCurrentUser();
-            setCurrentUser(retryResponse.data);
+          if (userData) {
+            console.log('Found existing valid auth session');
+            setCurrentUser(userData);
+            setIsAuthenticated(true);
             
-            // Try to get subscription after refresh
+            // Set user role
+            const role = userData.role || authPersist.getUserRole();
+            setUserRole(role);
+            
+            // Refresh token expiry to maintain session
+            authPersist.refreshTokenExpiry();
+            
+            // Verify user data is still current by fetching from API
             try {
-              const subscriptionResponse = await subscriptionService.getCurrentSubscription();
-              setSubscription({
-                tier: subscriptionResponse.data.tier || 'free',
-                status: subscriptionResponse.data.status || 'active',
-                isActive: subscriptionResponse.data.is_active !== false,
-                daysRemaining: subscriptionResponse.data.days_remaining || 0,
-                endDate: subscriptionResponse.data.end_date || null
-              });
-            } catch (subErr) {
-              console.error('Error loading subscription after refresh:', subErr);
-              setSubscription({
-                tier: 'free',
-                status: 'active',
-                isActive: true,
-                daysRemaining: 0
-              });
+              const response = await api.auth.getCurrentUser();
+              setCurrentUser(response);
+              
+              // Update stored user data
+              const updatedAuthData = {
+                token: authPersist.getValidToken(),
+                refreshToken: authPersist.getRefreshToken(),
+                user: response
+              };
+              authPersist.storeAuthData(updatedAuthData);
+              
+              // Try to fetch subscription data
+              try {
+                // Check if subscription service exists
+                if (api.subscription && typeof api.subscription.getCurrentSubscription === 'function') {
+                  const subscriptionData = await api.subscription.getCurrentSubscription();
+                  setSubscription(subscriptionData);
+                  
+                  // Determine access level
+                  const level = ACCESS_LEVEL_MAP[subscriptionData.tier?.toLowerCase() || 'free'] || 'basic';
+                  setAccessLevel(level);
+                } else {
+                  console.warn('Subscription service not available, using default access level');
+                  setSubscription({ tier: 'free', status: 'active' });
+                  setAccessLevel('intermediate');
+                }
+              } catch (subError) {
+                console.warn('Failed to fetch subscription data:', subError);
+                // Set default access level
+                setSubscription({ tier: 'free', status: 'active' });
+                setAccessLevel('intermediate');
+              }
+            } catch (apiError) {
+              console.warn('Failed to refresh user data:', apiError);
+              // Continue with stored data since the token is still valid
             }
-          } catch (refreshErr) {
-            console.error('Token refresh failed:', refreshErr);
-            // If refresh fails too, log the user out
-            authService.logout();
-            setSubscription({
-              tier: 'free',
-              status: 'active',
-              isActive: true,
-              daysRemaining: 0
-            });
+          } else {
+            // We have a token but no user data, try to fetch user data
+            try {
+              const response = await api.auth.getCurrentUser();
+              setCurrentUser(response);
+              setUserRole(response.role);
+              setIsAuthenticated(true);
+              
+              // Store the user data
+              const authData = {
+                token: authPersist.getValidToken(),
+                refreshToken: authPersist.getRefreshToken(),
+                user: response
+              };
+              
+              // Store with extended session for instructors
+              const expiryHours = authPersist.getSessionDuration(response);
+              authPersist.storeAuthData(authData, expiryHours);
+              
+              // Try to fetch subscription data
+              try {
+                // Check if subscription service exists
+                if (api.subscription && typeof api.subscription.getCurrentSubscription === 'function') {
+                  const subscriptionData = await api.subscription.getCurrentSubscription();
+                  setSubscription(subscriptionData);
+                  
+                  // Determine access level
+                  const level = ACCESS_LEVEL_MAP[subscriptionData.tier?.toLowerCase() || 'free'] || 'basic';
+                  setAccessLevel(level);
+                } else {
+                  console.warn('Subscription service not available, using default access level');
+                  setSubscription({ tier: 'free', status: 'active' });
+                  setAccessLevel('intermediate');
+                }
+              } catch (subError) {
+                console.warn('Failed to fetch subscription data:', subError);
+                // Set default access level
+                setSubscription({ tier: 'free', status: 'active' });
+                setAccessLevel('intermediate');
+              }
+            } catch (apiError) {
+              console.error('Token valid but failed to get user:', apiError);
+              // Token might be invalid despite our checks
+              authPersist.clearAuthData();
+              setCurrentUser(null);
+              setUserRole(null);
+              setIsAuthenticated(false);
+            }
           }
-        } finally {
-          setLoading(false);
+        } else {
+          // No valid token found
+          authPersist.clearAuthData();
+          setCurrentUser(null);
+          setUserRole(null);
+          setIsAuthenticated(false);
         }
-      } else {
+      } catch (e) {
+        console.error('Error during auth initialization:', e);
+        authPersist.clearAuthData();
+        setCurrentUser(null);
+        setUserRole(null);
+        setIsAuthenticated(false);
+      } finally {
         setLoading(false);
       }
     };
 
-    loadUser();
+    checkExistingAuth();
+    
+    // Set up periodic token refresh
+    const refreshInterval = setInterval(async () => {
+      if (authPersist.isTokenValid()) {
+        // Get current time and token expiry
+        const expiryString = localStorage.getItem('tokenExpiry');
+        if (expiryString) {
+          const expiry = new Date(expiryString);
+          const now = new Date();
+          const timeUntilExpiry = expiry.getTime() - now.getTime();
+          
+          // If token will expire in less than 5 minutes, refresh it
+          if (timeUntilExpiry < 5 * 60 * 1000) {
+            console.log('Token expiring soon, refreshing...');
+            try {
+              const refreshToken = authPersist.getRefreshToken();
+              if (refreshToken) {
+                await api.auth.refreshToken(refreshToken);
+                console.log('Token refreshed successfully');
+              }
+            } catch (error) {
+              console.error('Failed to refresh token:', error);
+            }
+          } else {
+            // Just extend the expiration time
+            authPersist.refreshTokenExpiry();
+          }
+        }
+      }
+    }, 15 * 60 * 1000); // Every 15 minutes
+    
+    return () => clearInterval(refreshInterval);
   }, []);
-
-
-
-  // Resend verification email
-const resendVerification = async (email) => {
-  try {
-    setError(null);
-    await authService.resendVerification(email);
-    return { success: true, message: 'Verification email sent successfully!' };
-  } catch (err) {
-    console.error('Email verification resend error:', err);
-    const errorMsg = err.response?.data?.detail || 'Failed to resend verification email';
-    setError(errorMsg);
-    return { success: false, error: errorMsg };
-  }
-};
-
-
-
 
   // Login function
   const login = async (email, password, rememberMe = false) => {
     try {
       setError(null);
-      // Pass remember me flag to determine token storage behavior
-      const data = await authService.login({ email, password, rememberMe });
+      setLoading(true);
       
-      // Get user details
-      const userResponse = await authService.getCurrentUser();
-      setCurrentUser(userResponse.data);
+      // Call login API
+      const response = await api.auth.login({ email, password, rememberMe });
       
-      // Get subscription details
-      try {
-        const subscriptionResponse = await subscriptionService.getCurrentSubscription();
-        setSubscription({
-          tier: subscriptionResponse.data.tier || 'free',
-          status: subscriptionResponse.data.status || 'active',
-          isActive: subscriptionResponse.data.is_active !== false,
-          daysRemaining: subscriptionResponse.data.days_remaining || 0,
-          endDate: subscriptionResponse.data.end_date || null
-        });
-      } catch (subErr) {
-        console.error('Error loading subscription after login:', subErr);
-        setSubscription({
-          tier: 'free',
-          status: 'active',
-          isActive: true,
-          daysRemaining: 0
-        });
+      // Extract token data
+      const token = response.access || response.token;
+      const refreshToken = response.refresh || response.refreshToken;
+      
+      if (!token) {
+        throw new Error('Authentication failed - no token received');
       }
       
-      return true;
-    } catch (err) {
-      console.error('Login error:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to login';
-      setError(errorMessage);
-      return false;
+      // Get user data
+      let userData;
+      try {
+        userData = await api.auth.getCurrentUser();
+      } catch (userError) {
+        console.error('Failed to fetch user data after login:', userError);
+        throw new Error('Authentication successful but failed to load user data');
+      }
+      
+      // Determine role and set extended expiry for instructors
+      const role = userData.role || 'student';
+      setUserRole(role);
+      setCurrentUser(userData);
+      setIsAuthenticated(true);
+      
+      // Store auth data with appropriate expiry
+      const isInstructor = role === 'instructor' || role === 'admin';
+      const expiryHours = isInstructor ? authPersist.INSTRUCTOR_EXPIRY_HOURS : authPersist.DEFAULT_EXPIRY_HOURS;
+      
+      authPersist.storeAuthData({
+        token,
+        refreshToken,
+        user: userData
+      }, expiryHours);
+      
+      // Fetch subscription data
+      try {
+        // Check if subscription service exists
+        if (api.subscription && typeof api.subscription.getCurrentSubscription === 'function') {
+          const subscriptionData = await api.subscription.getCurrentSubscription();
+          setSubscription(subscriptionData);
+          
+          // Determine access level
+          const level = ACCESS_LEVEL_MAP[subscriptionData.tier?.toLowerCase() || 'free'] || 'basic';
+          setAccessLevel(level);
+        } else {
+          console.warn('Subscription service not available, using default access level');
+          setSubscription({ tier: 'free', status: 'active' });
+          setAccessLevel('intermediate');
+        }
+      } catch (subError) {
+        console.warn('Failed to fetch subscription data:', subError);
+        // Set default access level
+        setSubscription({ tier: 'free', status: 'active' });
+        setAccessLevel('intermediate');
+      }
+      
+      // Make sure to return userData with role for the login component
+      console.log("AuthContext returning user data with role:", role);
+      return { ...userData, role };
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to login');
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -233,251 +303,97 @@ const resendVerification = async (email) => {
   const register = async (userData) => {
     try {
       setError(null);
-      await authService.register(userData);
-      
-      // With the enhanced backend, we don't auto-login after registration
-      // because email verification might be required
-      return { 
-        success: true, 
-        message: 'Registration successful! Please check your email to verify your account.' 
-      };
-    } catch (err) {
-      console.error('Registration error:', err);
-      
-      // Format error messages from the backend response
-      let errorMsg = 'Failed to register';
-      if (err.response?.data) {
-        const errors = err.response.data;
-        
-        // Check if it's a structured error object
-        if (typeof errors === 'object' && !Array.isArray(errors)) {
-          const messages = [];
-          for (const field in errors) {
-            const fieldErrors = errors[field];
-            if (Array.isArray(fieldErrors)) {
-              messages.push(`${field}: ${fieldErrors.join(', ')}`);
-            } else {
-              messages.push(`${field}: ${fieldErrors}`);
-            }
-          }
-          errorMsg = messages.join('; ');
-        } else if (typeof errors === 'string') {
-          errorMsg = errors;
-        }
-      }
-      
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
+      const response = await api.auth.register(userData);
+      return response;
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError(error.message || 'Failed to register');
+      throw error;
     }
   };
 
   // Logout function
-  const logout = () => {
-    authService.logout();
+  const logout = (redirectPath = '/login') => {
+    authPersist.clearAuthData();
     setCurrentUser(null);
-    setSubscription({
-      tier: 'free',
-      status: 'active',
-      isActive: true,
-      daysRemaining: 0
-    });
+    setUserRole(null);
+    setSubscription(null);
+    setAccessLevel('basic');
+    setIsAuthenticated(false);
+    navigate(redirectPath);
   };
 
-  // Verify email function
-  const verifyEmail = async (token) => {
-    try {
-      setError(null);
-      await authService.verifyEmail(token);
-      
-      // If the user is already logged in, update their verification status
-      if (currentUser) {
-        const updatedUser = { ...currentUser, isEmailVerified: true };
-        setCurrentUser(updatedUser);
-      }
-      
-      return { success: true, message: 'Email verified successfully!' };
-    } catch (err) {
-      console.error('Email verification error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to verify email';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    }
-  };
-
-  // Request password reset
+  // Password reset functions
   const requestPasswordReset = async (email) => {
     try {
-      setError(null);
-      await authService.requestPasswordReset(email);
-      return { success: true, message: 'Password reset email sent!' };
-    } catch (err) {
-      console.error('Password reset request error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to request password reset';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
+      await api.auth.requestPasswordReset(email);
+      return true;
+    } catch (error) {
+      setError(error.message || 'Failed to request password reset');
+      throw error;
     }
   };
 
-  // Reset password
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = async (token, password) => {
     try {
-      setError(null);
-      await authService.resetPassword(token, newPassword);
-      return { success: true, message: 'Password reset successful!' };
-    } catch (err) {
-      console.error('Password reset error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to reset password';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
+      await api.auth.resetPassword(token, password);
+      return true;
+    } catch (error) {
+      setError(error.message || 'Failed to reset password');
+      throw error;
     }
   };
 
-  // Update user profile
-  const updateUserProfile = async (profileData) => {
-    try {
-      setError(null);
-      const response = await authService.updateProfile(profileData);
-      setCurrentUser({ ...currentUser, ...response.data });
-      return { success: true, message: 'Profile updated successfully!' };
-    } catch (err) {
-      console.error('Profile update error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to update profile';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    }
-  };
+  // Role checking functions
+  const isInstructor = () => userRole === 'instructor';
+  const isAdmin = () => userRole === 'admin' || userRole === 'administrator';
+  const isStudent = () => userRole === 'student' || (!isInstructor() && !isAdmin());
 
-  // Subscription management functions
-  
-  // Upgrade subscription
-  const upgradeSubscription = async (tier, paymentDetails = {}) => {
-    try {
-      setError(null);
-      const response = await subscriptionService.upgradeSubscription(tier, paymentDetails);
-      
-      setSubscription({
-        tier: response.data.tier,
-        status: response.data.status,
-        isActive: response.data.is_active !== false,
-        daysRemaining: response.data.days_remaining || 0,
-        endDate: response.data.end_date || null
-      });
-      
-      return { 
-        success: true, 
-        message: `Successfully upgraded to ${tier} subscription!` 
-      };
-    } catch (err) {
-      console.error('Subscription upgrade error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to upgrade subscription';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    }
-  };
-  
-  // Cancel subscription
-  const cancelSubscription = async () => {
-    try {
-      setError(null);
-      const response = await subscriptionService.cancelSubscription();
-      
-      setSubscription({
-        ...subscription,
-        status: 'cancelled',
-        isActive: response.data.is_active !== false
-      });
-      
-      return { 
-        success: true, 
-        message: 'Subscription cancelled. You will have access until the end of your billing period.' 
-      };
-    } catch (err) {
-      console.error('Subscription cancellation error:', err);
-      const errorMsg = err.response?.data?.detail || 'Failed to cancel subscription';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    }
-  };
-
-  // Check if user is authenticated
-  const isAuthenticated = () => {
-    return !!currentUser;
-  };
-
-  // Role-based access control helpers
-  const hasRole = (role) => {
-    return currentUser?.role === role;
-  };
-  
-  const isStudent = () => hasRole('student');
-  const isInstructor = () => hasRole('instructor');
-  const isAdmin = () => hasRole('admin');
-  const isStaff = () => hasRole('staff');
-  
-  // Check if user is a subscriber (has paid plan)
-  const isSubscriber = () => {
-    return isAuthenticated() && 
-           subscription.tier !== 'free' && 
-           subscription.isActive;
-  };
-  
-  // Updated getAccessLevel function with the new logic
+  // Get access level for content based on subscription and login status
   const getAccessLevel = () => {
-    if (!isAuthenticated()) {
-      return 'basic'; // Unregistered users get basic access
-    }
+    if (!currentUser) return 'basic';
+    return accessLevel;
+  };
+
+  // Check if user can access content at a given level
+  const canAccessContent = (contentLevel) => {
+    const userLevel = getAccessLevel();
     
-    // Use the mapping to determine access level
-    const tier = subscription.isActive ? subscription.tier : 'free';
-    return {
-      'free': 'intermediate',  // Free registered users get intermediate access
-      'basic': 'intermediate', // Basic paid tier also gets intermediate access
-      'premium': 'advanced'    // Premium paid tier gets advanced access
-    }[tier] || 'intermediate';
+    if (contentLevel === 'basic') return true;
+    if (contentLevel === 'intermediate') return userLevel !== 'basic';
+    if (contentLevel === 'advanced') return userLevel === 'advanced';
+    
+    return false;
   };
 
   // Context value
   const value = {
     currentUser,
+    userRole,
     subscription,
+    accessLevel,
     loading,
+    isLoading: loading, // Add isLoading property that references loading for compatibility
     error,
     login,
-    register,
     logout,
-    isAuthenticated,
-    verifyEmail,
+    register,
     requestPasswordReset,
     resetPassword,
-    updateUserProfile,
-    hasRole,
-    isStudent,
     isInstructor,
     isAdmin,
-    isStaff,
-    resendVerification,
-    // New subscription-related functions
-    upgradeSubscription,
-    cancelSubscription,
-    isSubscriber,
+    isStudent,
+    isAuthenticated,
     getAccessLevel,
-    setError: (msg) => setError(msg), // Allow clearing or setting error from components
+    canAccessContent
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook for using auth context
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
 export default AuthContext;
+// END OF CODE

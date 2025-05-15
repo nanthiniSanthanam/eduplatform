@@ -121,6 +121,7 @@ class LessonSerializer(serializers.ModelSerializer):
     resources = ResourceSerializer(many=True, read_only=True)
     premium_resources = serializers.SerializerMethodField()
     is_completed = serializers.SerializerMethodField()
+    assessment = AssessmentSerializer(read_only=True)
 
     class Meta:
         model = Lesson
@@ -128,7 +129,7 @@ class LessonSerializer(serializers.ModelSerializer):
             'id', 'title', 'content', 'access_level', 'duration',
             'type', 'order', 'has_assessment', 'has_lab',
             'is_free_preview', 'resources', 'premium_resources',
-            'is_completed'
+            'is_completed', 'assessment'
         ]
         # Basic_content and intermediate_content aren't directly exposed
         # They're used in to_representation based on access level
@@ -144,6 +145,7 @@ class LessonSerializer(serializers.ModelSerializer):
                 user=request.user,
                 course=obj.module.course
             )
+            # Check if progress record exists with is_completed=True
             progress = Progress.objects.filter(
                 enrollment=enrollment,
                 lesson=obj,
@@ -151,6 +153,9 @@ class LessonSerializer(serializers.ModelSerializer):
             ).exists()
             return progress
         except Enrollment.DoesNotExist:
+            return False
+        except Exception as e:
+            print(f"Error determining lesson completion status: {e}")
             return False
 
     def get_premium_resources(self, obj):
@@ -203,10 +208,12 @@ class LessonSerializer(serializers.ModelSerializer):
 
 
 class ModuleSerializer(serializers.ModelSerializer):
-    """Serializer for course modules/sections"""
+    """Serializer for course modules/sections with nested lessons"""
+    lessons = LessonSerializer(many=True, read_only=True)
+
     class Meta:
         model = Module
-        fields = ['id', 'title', 'description', 'order', 'duration']
+        fields = ['id', 'title', 'description', 'order', 'duration', 'lessons']
 
 
 class ModuleDetailSerializer(serializers.ModelSerializer):
@@ -273,13 +280,14 @@ class CourseSerializer(serializers.ModelSerializer):
 
 
 class CourseDetailSerializer(CourseSerializer):
-    """Extended course serializer with modules and user progress"""
+    """Extended course serializer with detailed modules and user progress"""
     modules = ModuleSerializer(many=True, read_only=True)
     user_progress = serializers.SerializerMethodField()
 
     class Meta(CourseSerializer.Meta):
-        fields = CourseSerializer.Meta.fields + \
-            ['modules', 'user_progress', 'requirements', 'skills']
+        fields = CourseSerializer.Meta.fields + [
+            'modules', 'user_progress', 'requirements', 'skills'
+        ]
 
     def get_user_progress(self, obj):
         """Get the user's progress in this course"""

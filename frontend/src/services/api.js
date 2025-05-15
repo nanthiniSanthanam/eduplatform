@@ -1,1203 +1,1492 @@
-/**
- * File: frontend/src/services/api.js
- * Purpose: API Service for Educational Platform with JWT Authentication and Tiered Access
- * 
- * This revised module provides the API services for the Educational Platform,
- * with corrected endpoints that exactly match the backend URL structure.
- * 
- * Key Changes:
- * 1. Fixed all endpoint paths to match the backend structure
- * 2. Changed '/users/' to '/user/' to match backend convention
- * 3. Removed duplicate '/api' prefixes from endpoint paths
- * 4. Updated authentication endpoints to match JWT endpoints
- * 5. Ensured consistent use of 'accessToken' instead of 'token'
- * 6. Added notes for endpoints that may need backend implementation
- * 
- * Backend Connection Points (Verified):
- * - POST /api/token/ - Get JWT tokens with email/password
- * - POST /api/token/refresh/ - Refresh JWT token
- * - POST /api/user/register/ - Register new user
- * - GET /api/user/me/ - Get current user profile
- * - GET /api/courses/ - Get all courses
- * - GET /api/categories/ - Get all categories
- * 
- * @author nanthiniSanthanam (original)
- * @author cadsanthanam (revised 2025-04-29)
- * @version 3.1
- */
-
 import axios from 'axios';
+import { snakeToCamel, camelToSnake } from '../utils/transformData';
+import secureTokenStorage from '../utils/secureTokenStorage';
+import { logError, logWarning } from '../utils/logger';
 
-/**
- * Create axios instance with base URL
- * This initializes a consistent client for all API requests with common configuration
- */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (process.env.NODE_ENV === 'development' ? '/api' : null);
+
+if (!API_BASE_URL) {
+  const errorMsg = 'API_BASE_URL is not configured. Please set VITE_API_BASE_URL in your environment.';
+  logError(new Error(errorMsg));
+  throw new Error(errorMsg);
+}
+
+const TOKEN_STORAGE_KEYS = {
+  ACCESS: 'accessToken',
+  REFRESH: 'refreshToken',
+  USER: 'user',
+  PERSISTENCE: 'tokenPersistence'
+};
+
+const DEBUG_MODE = import.meta.env.VITE_DEBUG_API === 'true' || process.env.NODE_ENV === 'development';
+const ALLOW_MOCK_FALLBACK = import.meta.env.VITE_ALLOW_MOCK_FALLBACK === 'true' || false;
+const REQUEST_TIMEOUT = 15000;
+const CONTENT_CACHE_TTL = 60 * 60 * 1000;
+
+const API_ENDPOINTS = {
+  AUTH: {
+    LOGIN: `${API_BASE_URL}/user/login/`,
+    LOGOUT: `${API_BASE_URL}/user/logout/`,
+    REFRESH: `${API_BASE_URL}/token/refresh/`,
+    REGISTER: `${API_BASE_URL}/user/register/`,
+    CURRENT_USER: `${API_BASE_URL}/user/me/`,
+    VERIFY_EMAIL: `${API_BASE_URL}/user/email/verify/`,
+    RESET_PASSWORD: `${API_BASE_URL}/user/password/reset/`,
+    RESET_PASSWORD_REQUEST: `${API_BASE_URL}/user/reset-password-request/`,
+    CONFIRM_RESET: `${API_BASE_URL}/user/password/reset/confirm/`,
+    CHANGE_PASSWORD: `${API_BASE_URL}/user/password/change/`,
+  },
+  COURSE: {
+    BASE: `${API_BASE_URL}/courses/`,
+    FEATURED: `${API_BASE_URL}/courses/featured/`,
+    POPULAR: `${API_BASE_URL}/courses/popular/`,
+    LATEST: `${API_BASE_URL}/courses/latest/`,
+    SEARCH: `${API_BASE_URL}/courses/search/`,
+    COURSE_BY_SLUG: (slug) => `${API_BASE_URL}/courses/${slug}/`,
+    ENROLL: (slug) => `${API_BASE_URL}/courses/${slug}/enroll/`,
+    MODULES: (slug) => `${API_BASE_URL}/courses/${slug}/modules/`,
+    REVIEWS: (slug) => `${API_BASE_URL}/courses/${slug}/reviews/`,
+    REVIEW: (slug) => `${API_BASE_URL}/courses/${slug}/review/`,
+    UPDATE_REVIEW: (slug, reviewId) => `${API_BASE_URL}/courses/${slug}/review/${reviewId}/`,
+    CERTIFICATE: (slug) => `${API_BASE_URL}/courses/${slug}/certificate/`,
+    DISCUSSIONS: (slug) => `${API_BASE_URL}/courses/${slug}/discussions/`,
+    DISCUSSION: (slug, discussionId) => `${API_BASE_URL}/courses/${slug}/discussions/${discussionId}/`,
+    DISCUSSION_REPLIES: (slug, discussionId) => `${API_BASE_URL}/courses/${slug}/discussions/${discussionId}/replies/`,
+  },
+  MODULE: {
+    DETAILS: (moduleId) => `${API_BASE_URL}/modules/${moduleId}/`,
+    LESSONS: (moduleId) => `${API_BASE_URL}/modules/${moduleId}/lessons/`,
+  },
+  LESSON: {
+    DETAILS: (lessonId) => `${API_BASE_URL}/lessons/${lessonId}/`,
+    COMPLETE: (lessonId) => `${API_BASE_URL}/lessons/${lessonId}/complete/`,
+  },
+  USER: {
+    ME: `${API_BASE_URL}/user/me/`,
+    UPDATE_PROFILE: `${API_BASE_URL}/user/profile/`,
+    SUBSCRIPTION: {
+      CURRENT: `${API_BASE_URL}/user/subscription/current/`,
+      UPGRADE: `${API_BASE_URL}/user/subscription/upgrade/`,
+      CANCEL: `${API_BASE_URL}/user/subscription/cancel/`,
+    },
+    PROGRESS: {
+      BASE: `${API_BASE_URL}/user/progress/`,
+      COURSE: (courseId) => `${API_BASE_URL}/user/progress/${courseId}/`,
+      STATS: `${API_BASE_URL}/user/progress/stats/`,
+    },
+    ASSESSMENT_ATTEMPTS: `${API_BASE_URL}/user/assessment-attempts/`,
+    ENROLLMENTS: `${API_BASE_URL}/enrollments/`,
+  },
+  ASSESSMENT: {
+    BASE: `${API_BASE_URL}/assessments/`,
+    DETAILS: (assessmentId) => `${API_BASE_URL}/assessments/${assessmentId}/`,
+    START: (assessmentId) => `${API_BASE_URL}/assessments/${assessmentId}/start/`,
+    ATTEMPTS: `${API_BASE_URL}/assessment-attempts/`,
+    SUBMIT: (attemptId) => `${API_BASE_URL}/assessment-attempts/${attemptId}/submit/`,
+  },
+  NOTE: {
+    BASE: `${API_BASE_URL}/notes/`,
+    DETAIL: (noteId) => `${API_BASE_URL}/notes/${noteId}/`,
+  },
+  LAB: {
+    BASE: `${API_BASE_URL}/labs/`,
+    DETAILS: (labId) => `${API_BASE_URL}/labs/${labId}/`,
+    START: (labId) => `${API_BASE_URL}/labs/${labId}/start/`,
+    SUBMIT: (labId) => `${API_BASE_URL}/labs/${labId}/submit/`,
+  },
+  CATEGORY: {
+    BASE: `${API_BASE_URL}/categories/`,
+    COURSES: (categorySlug) => `${API_BASE_URL}/categories/${categorySlug}/courses/`,
+  },
+  CERTIFICATE: {
+    BASE: `${API_BASE_URL}/certificates/`,
+    VERIFY: (code) => `${API_BASE_URL}/certificates/verify/${code}/`,
+  },
+  BLOG: {
+    POSTS: `${API_BASE_URL}/blog/posts/`,
+    POST_BY_SLUG: (slug) => `${API_BASE_URL}/blog/posts/${slug}/`,
+  },
+  SYSTEM: {
+    STATUS: `${API_BASE_URL}/system/status/`,
+    DB_STATUS: `${API_BASE_URL}/system/db-status/`,
+  },
+  STATISTICS: {
+    PLATFORM: `${API_BASE_URL}/statistics/platform/`,
+    USER: `${API_BASE_URL}/statistics/user/`,
+    INSTRUCTOR: `${API_BASE_URL}/statistics/instructor/`,
+  },
+  TESTIMONIAL: {
+    BASE: `${API_BASE_URL}/testimonials/`,
+    FEATURED: `${API_BASE_URL}/testimonials/featured/`,
+  },
+};
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000, // 15 seconds timeout
+  timeout: REQUEST_TIMEOUT,
 });
 
-/**
- * Request interceptor for authentication
- * Automatically adds the authentication token to all outgoing requests if available
- */
+let refreshTokenPromise = null;
+
+const refreshAuthToken = async () => {
+  if (refreshTokenPromise) {
+    return refreshTokenPromise;
+  }
+  
+  refreshTokenPromise = (async () => {
+    try {
+      if (DEBUG_MODE) console.log('Refreshing authentication token');
+      
+      const refreshToken = secureTokenStorage.getRefreshToken();
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      
+      const response = await apiClient.post(
+        API_ENDPOINTS.AUTH.REFRESH,
+        { refresh: refreshToken },
+        {
+          skipAuthRefresh: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': undefined
+          }
+        }
+      );
+      
+      if (!response.data?.access) {
+        throw new Error('No access token in refresh response');
+      }
+      
+      secureTokenStorage.updateAccessToken(response.data.access);
+      
+      if (DEBUG_MODE) console.log('Token refreshed successfully');
+      
+      return response.data.access;
+    } catch (error) {
+      logWarning('Token refresh failed:', { error });
+      
+      secureTokenStorage.clearAuthData();
+      
+      const authFailedEvent = new CustomEvent('auth:failed', {
+        detail: { error }
+      });
+      window.dispatchEvent(authFailedEvent);
+      
+      throw error;
+    } finally {
+      refreshTokenPromise = null;
+    }
+  })();
+  
+  return refreshTokenPromise;
+};
+
+function sanitizeLogData(data) {
+  if (!data || typeof data !== 'object') return data;
+  
+  const sanitized = { ...data };
+  
+  const sensitiveFields = [
+    'password', 'token', 'accessToken', 'refreshToken', 'access', 'refresh',
+    'access_token', 'refresh_token', 'authorization', 'email', 'phone',
+    'credit_card', 'cardNumber', 'cvv', 'cvc', 'expiry'
+  ];
+  
+  sensitiveFields.forEach(field => {
+    if (sanitized[field] !== undefined) {
+      sanitized[field] = '[REDACTED]';
+    }
+  });
+  
+  return sanitized;
+}
+
 apiClient.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  error => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
-);
-
-/**
- * Response interceptor for token refresh or logout
- * Handles 401 Unauthorized errors by attempting to refresh the token
- * If refresh fails, logs the user out and redirects to login page
- */
-apiClient.interceptors.response.use(
-  response => response,
-  async error => {
-    const originalRequest = error.config;
-    
-    // If error is 401 and not already trying to refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        // Try to refresh the token
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-        
-        // Use the correct endpoint for token refresh
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/token/refresh/`,
-          { refresh: refreshToken }
-        );
-        
-        // Store the new access token
-        localStorage.setItem('accessToken', response.data.access);
-        
-        // Update the original request and retry
-        originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        // If refresh fails, logout user
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        
-        // Redirect to login page
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+    if (!config.skipAuthRefresh) {
+      const token = secureTokenStorage.getValidToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        secureTokenStorage.refreshTokenExpiry();
       }
     }
     
-    // Handle specific error status codes
-    if (error.response?.status === 403) {
-      console.error('Permission denied:', originalRequest.url);
-      // If it's a permission issue, might be due to role restrictions
-    } else if (error.response?.status === 404) {
-      console.error('Resource not found:', originalRequest.url);
-    } else if (error.response?.status === 500) {
-      console.error('Server error:', error.response?.data);
+    if (config.data && !(config.data instanceof FormData)) {
+      config.data = camelToSnake(config.data);
+    }
+    
+    if (DEBUG_MODE) {
+      console.log(`📤 [API REQUEST] ${config.method?.toUpperCase() || 'GET'} ${config.url}`, 
+        config.data ? sanitizeLogData(config.data) : (config.params ? sanitizeLogData(config.params) : ''));
+    }
+    
+    return config;
+  },
+  error => {
+    if (DEBUG_MODE) {
+      console.error('❌ [API REQUEST ERROR]', error);
+    }
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  response => {
+    if (response.data) {
+      response.data = snakeToCamel(response.data);
+    }
+    
+    if (DEBUG_MODE) {
+      console.log(`📥 [API RESPONSE] ${response.status} ${response.config.url}`, 
+        response.data ? sanitizeLogData(response.data) : '');
+    }
+    
+    return response;
+  },
+  async error => {
+    const originalRequest = error.config;
+    
+    if (DEBUG_MODE) {
+      if (!error.response) {
+        console.error(`❌ [API NETWORK ERROR] for ${originalRequest?.url || 'unknown URL'}`, 
+          'This might be due to CORS, proxy configuration, or server being down');
+        console.log('Check:');
+        console.log('1. Is your backend server running?');
+        console.log('2. Does your Vite proxy configuration match the API URL?');
+        console.log('3. CORS settings in backend/educore/settings.py match frontend origin?');
+      } else {
+        console.error(`❌ [API ERROR] ${error.response?.status || 'Unknown status'} ${originalRequest?.url || ''}`, 
+          error.response?.data ? error.response.data : error.message);
+      }
+    }
+    
+    if (
+      originalRequest?._retry || 
+      originalRequest?.skipAuthRefresh ||
+      (originalRequest?.url && originalRequest.url.includes('token/refresh'))
+    ) {
+      return Promise.reject(error);
+    }
+    
+    if (error.response && error.response.status === 401) {
+      originalRequest._retry = true;
+      
+      try {
+        const newToken = await refreshAuthToken();
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return axios(originalRequest);
+      } catch (refreshError) {
+        return Promise.reject(error);
+      }
     }
     
     return Promise.reject(error);
   }
 );
 
-/**
- * Generic request handler with error formatting
- * @param {Function} apiCall - The API call function to execute
- * @param {String} errorMessage - Custom error message to display
- * @returns {Promise} - The API response or formatted error
- */
 const handleRequest = async (apiCall, errorMessage) => {
   try {
-    const response = await apiCall();
-    return response;
-  } catch (error) {
-    console.error(`${errorMessage}:`, error);
+    console.log(`📤 API request starting: ${errorMessage}`);
+    const startTime = performance.now();
     
-    // Format error for consistent handling
+    const response = await apiCall();
+    
+    const duration = performance.now() - startTime;
+    console.log(`📥 API response received in ${duration.toFixed(2)}ms`);
+    
+    return response.data;
+  } catch (error) {
+    if (error.name === 'AbortError' || error.message === 'canceled') {
+      console.log(`Request aborted: ${errorMessage}`);
+      throw error;
+    }
+    
+    if (DEBUG_MODE) {
+      if (!error.response) {
+        console.error(`${errorMessage} (Network Error):`, error);
+      } else {
+        console.error(`${errorMessage}:`, error.response?.status, error.message);
+        console.error(`Response data:`, error.response?.data);
+      }
+    }
+    
     const formattedError = {
       message: error.response?.data?.detail || error.response?.data?.message || errorMessage,
-      status: error.response?.status,
+      status: error.response?.status || 'network_error',
       details: error.response?.data || {},
-      originalError: error
+      originalError: error,
+      isNetworkError: !error.response && error.request
     };
     
     throw formattedError;
   }
 };
 
-/**
- * Authentication and user management services
- * Handles login, registration, token management, and user profile operations
- */
-export const authService = {
-  /**
-   * Authenticates a user and stores JWT tokens
-   * @param {Object} credentials - User credentials (email, password, rememberMe)
-   * @returns {Promise} - User authentication data including tokens
-   */
-  login: async (credentials) => {
-    return handleRequest(
-      async () => {
-        const { email, password, rememberMe } = credentials;
-        // Use correct endpoint: /api/token/ -> /token/
-        const response = await apiClient.post('/token/', { email, password });
-        
-        // Store tokens
-        localStorage.setItem('accessToken', response.data.access);
-        localStorage.setItem('refreshToken', response.data.refresh);
-        
-        // If remember me is false, set tokens to expire when browser closes
-        if (!rememberMe) {
-          // Using sessionStorage would be more ideal, but we need to maintain API compatibility
-          // Instead, we set a flag to check on app initialization
-          localStorage.setItem('tokenPersistence', 'session');
-        } else {
-          localStorage.setItem('tokenPersistence', 'permanent');
-        }
-        
-        return response.data;
-      },
-      'Login failed'
-    );
+const contentCache = {
+  isOptedOut: () => {
+    try {
+      return localStorage.getItem('content_cache_opt_out') === 'true';
+    } catch (e) {
+      return false;
+    }
   },
   
-  /**   * Registers a new user
-   * @param {Object} userData - User registration data
-   * @returns {Promise} - New user data
-   */
-  register: async (userData) => {
-    // Transform camelCase field names to snake_case if needed
-    const transformedData = {
-      ...(userData.firstName && { first_name: userData.firstName }),
-      ...(userData.lastName && { last_name: userData.lastName }),
-      ...(userData.email && { email: userData.email }),
-      ...(userData.username && { username: userData.username }),
-      ...(userData.password && { password: userData.password }),
-      ...(userData.role && { role: userData.role }),
-      ...userData, // Include other fields that might not need transformation
-    };
+  setOptOut: (optOut) => {
+    try {
+      localStorage.setItem('content_cache_opt_out', optOut ? 'true' : 'false');
+    } catch (e) {
+      logWarning('Could not set content cache preference', { error: e });
+    }
+  },
+  
+  set: (key, data) => {
+    if (contentCache.isOptedOut()) return false;
     
-    // Updated to use correct path: /api/user/register/ -> /user/register/
+    try {
+      const cacheData = {
+        data,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(key, JSON.stringify(cacheData));
+      return true;
+    } catch (e) {
+      logWarning('Failed to cache content:', { error: e });
+      return false;
+    }
+  },
+  
+  get: (key) => {
+    if (contentCache.isOptedOut()) return null;
+    
+    try {
+      const cachedData = localStorage.getItem(key);
+      if (!cachedData) return null;
+      
+      const parsed = JSON.parse(cachedData);
+      
+      const cacheTime = new Date(parsed.timestamp).getTime();
+      const now = new Date().getTime();
+      if (now - cacheTime > CONTENT_CACHE_TTL) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      
+      return parsed.data;
+    } catch (e) {
+      logWarning('Failed to retrieve cached content:', { error: e });
+      return null;
+    }
+  },
+  
+  clearAll: () => {
+    try {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('content_cache_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      logWarning('Failed to clear cached content:', { error: e });
+    }
+  }
+};
+
+const authService = {
+  login: async (credentials) => {
+    try {
+      console.log("Starting authentication process");
+      
+      secureTokenStorage.clearAuthData();
+      
+      const response = await axios.post(API_ENDPOINTS.AUTH.LOGIN, {
+        email: credentials.email,
+        password: credentials.password,
+      });
+      
+      if (!response.data || !response.data.access) {
+        console.error("No token in response", response.data);
+        throw new Error('Invalid response from authentication server');
+      }
+      
+      console.log("Authentication successful");
+      
+      secureTokenStorage.setAuthData(
+        response.data.access, 
+        response.data.refresh, 
+        credentials.rememberMe
+      );
+      
+      return response.data;
+    } catch (error) {
+      console.error("Authentication failed:", error);
+      
+      const errorMsg = error.response?.data?.detail || 
+                       error.response?.data?.message || 
+                       'Login failed. Please check your credentials.';
+      
+      throw new Error(errorMsg);
+    }
+  },
+  
+  register: async (userData) => {
     return handleRequest(
-      async () => await apiClient.post('/user/register/', transformedData),
+      async () => await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, userData),
       'Registration failed'
     );
   },
   
-/**
- * Resends verification email to user added on 29.04.2025
- * @param {String|Object} emailData - Email address or object with email property
- * @returns {Promise} - Resend result
- */
-resendVerification: async (emailData) => {
-  const payload = typeof emailData === 'string' 
-    ? { email: emailData }
-    : emailData;
-    
-  // Use correct path: /api/user/email/verify/resend/ -> /user/email/verify/resend/
-  return handleRequest(
-    async () => await apiClient.post('/user/email/verify/resend/', payload),
-    'Failed to resend verification email'
-  );
-},
-
-
-  /**
-   * Verifies a user's email address
-   * @param {String} token - Email verification token
-   * @returns {Promise} - Verification result
-   */
   verifyEmail: async (token) => {
-    // Updated to use correct path: /api/user/email/verify/ -> /user/email/verify/
     return handleRequest(
-      async () => await apiClient.post('/user/email/verify/', { token }),
+      async () => await apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL, { token }),
       'Email verification failed'
     );
   },
   
-  /**
-   * Logs out the current user by removing stored tokens
-   */
-  logout: () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('tokenPersistence');
-  },
-  
-  /**
-   * Retrieves the current user's profile information
-   * @returns {Promise} - Current user data
-   */
-  getCurrentUser: async () => {
-    // Updated to use correct path: /api/user/me/ -> /user/me/
+  requestPasswordReset: async (email) => {
     return handleRequest(
-      async () => await apiClient.get('/user/me/'),
-      'Failed to retrieve user data'
+      async () => await apiClient.post(API_ENDPOINTS.AUTH.RESET_PASSWORD_REQUEST, { email }),
+      'Password reset request failed'
     );
   },
   
-  /**
-   * Updates the current user's profile information
-   * @param {Object} userData - User data to update
-   * @returns {Promise} - Updated user data
-   */
-  updateProfile: async (userData) => {
-    // Transform camelCase field names to snake_case if needed
-    const transformedData = {
-      ...(userData.firstName && { first_name: userData.firstName }),
-      ...(userData.lastName && { last_name: userData.lastName }),
-      ...userData, // Include other fields that might not need transformation
-    };
-    
-    // Updated to use correct path: /api/user/me/ -> /user/me/
+  resetPassword: async (token, password) => {
     return handleRequest(
-      async () => await apiClient.put('/user/me/', transformedData),
+      async () => await apiClient.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, { token, password }),
+      'Password reset failed'
+    );
+  },
+  
+  refreshToken: async () => {
+    try {
+      return await refreshAuthToken();
+    } catch (error) {
+      throw error;
+    }
+  },
+  
+  logout: async (navigate) => {
+    secureTokenStorage.clearAuthData();
+    
+    localStorage.removeItem(TOKEN_STORAGE_KEYS.ACCESS);
+    localStorage.removeItem(TOKEN_STORAGE_KEYS.REFRESH);
+    localStorage.removeItem(TOKEN_STORAGE_KEYS.USER);
+    localStorage.removeItem(TOKEN_STORAGE_KEYS.PERSISTENCE);
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userProfile');
+    localStorage.removeItem('subscription');
+    
+    if (typeof navigate === 'function') {
+      navigate('/login', { replace: true });
+    } else {
+      window.location.href = '/login';
+    }
+  },
+  
+  getCurrentUser: async (cacheBuster) => {
+    console.log('Requesting user data from API');
+    
+    if (!secureTokenStorage.isTokenValid()) {
+      console.log('No valid token available, skipping user profile request');
+      return null;
+    }
+    
+    const cacheBustParam = cacheBuster || `_cache_buster=${Date.now()}`;
+    
+    try {
+      const response = await apiClient.get(`${API_ENDPOINTS.USER.ME}?${cacheBustParam}`);
+      
+      console.log('Successfully retrieved user data');
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.status === 401) {
+        console.log('User not authenticated');
+        return null;
+      }
+      
+      console.error('Error fetching user data:', error);
+      return null;
+    }
+  },
+  
+  updateProfile: async (userData) => {
+    return handleRequest(
+      async () => await apiClient.put(API_ENDPOINTS.USER.UPDATE_PROFILE, userData),
       'Failed to update profile'
     );
   },
   
-  /**
-   * Changes the user's password
-   * @param {Object} passwordData - Old and new password
-   * @returns {Promise} - Change password result
-   */
   changePassword: async (passwordData) => {
-    const transformedData = {
-      old_password: passwordData.oldPassword,
-      new_password: passwordData.newPassword
-    };
-    
-    // Updated to use correct path: /api/user/password/change/ -> /user/password/change/
     return handleRequest(
-      async () => await apiClient.post('/user/password/change/', transformedData),
+      async () => await apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, passwordData),
       'Failed to change password'
     );
   },
   
-  /**
-   * Requests a password reset email
-   * @param {String|Object} emailData - Email address or object with email property
-   * @returns {Promise} - Request result
-   */
-  requestPasswordReset: async (emailData) => {
-    const payload = typeof emailData === 'string' 
-      ? { email: emailData }
-      : emailData;
+  isAuthenticated: () => {
+    return secureTokenStorage.isTokenValid();
+  }
+};
+
+const subscriptionService = {
+  getCurrentSubscription: async () => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.USER.SUBSCRIPTION.CURRENT),
+        'Failed to retrieve subscription information'
+      );
+    } catch (error) {
+      if (ALLOW_MOCK_FALLBACK && error.response && error.response.status === 404) {
+        logWarning('Subscription endpoint not available, using mock data');
+        
+        return {
+          tier: 'free',
+          status: 'active',
+          isActive: true,
+          daysRemaining: 30,
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        };
+      }
       
-    // Updated to use correct path: /api/user/password/reset/ -> /user/password/reset/
-    return handleRequest(
-      async () => await apiClient.post('/user/password/reset/', payload),
-      'Failed to request password reset'
-    );
+      throw error;
+    }
   },
   
-  /**
-   * Resets password with token
-   * @param {String} token - Password reset token
-   * @param {String|Object} password - New password or object with password property
-   * @returns {Promise} - Reset result
-   */
-  resetPassword: async (token, password) => {
-    const payload = {
-      token,
-      password: typeof password === 'string' ? password : password.password
+  upgradeSubscription: async (subscriptionData) => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.post(
+          API_ENDPOINTS.USER.SUBSCRIPTION.UPGRADE,
+          subscriptionData
+        ),
+        'Failed to upgrade subscription'
+      );
+    } catch (error) {
+      if (ALLOW_MOCK_FALLBACK && error.response && error.response.status === 404) {
+        logWarning('Subscription upgrade endpoint not available, using mock data');
+        
+        return {
+          tier: subscriptionData.tier,
+          status: 'active',
+          isActive: true,
+          daysRemaining: 30,
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        };
+      }
+      
+      throw error;
+    }
+  },
+  
+  cancelSubscription: async () => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.post(API_ENDPOINTS.USER.SUBSCRIPTION.CANCEL),
+        'Failed to cancel subscription'
+      );
+    } catch (error) {
+      if (ALLOW_MOCK_FALLBACK && error.response && error.response.status === 404) {
+        logWarning('Subscription cancel endpoint not available, using mock data');
+        
+        return {
+          tier: 'free',
+          status: 'inactive',
+          isActive: false,
+          daysRemaining: 0,
+          endDate: new Date().toISOString()
+        };
+      }
+      
+      throw error;
+    }
+  }
+};
+
+const handlePublicRequest = async (url, errorMessage, options = {}) => {
+  try {
+    console.log(`Making public API request to: ${url}`);
+    
+    const requestOptions = {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': undefined
+      },
+      ...options
     };
     
-    // Updated to use correct path: /api/user/password/reset/confirm/ -> /user/password/reset/confirm/
-    return handleRequest(
-      async () => await apiClient.post('/user/password/reset/confirm/', payload),
-      'Failed to reset password'
-    );
-  },
-  
-  /**
-   * Refreshes the access token using the refresh token
-   * @returns {Promise} - New access token
-   */
-  refreshToken: async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
+    const response = await axios.get(url, requestOptions);
+    
+    const transformedData = snakeToCamel(response.data);
+    console.log(`Public API request successful`);
+    
+    return transformedData;
+  } catch (error) {
+    if (error.name === 'AbortError' || error.message === 'canceled') {
+      console.log(`Public request aborted: ${url}`);
+      throw error;
     }
     
-    // Updated to use correct path: /api/token/refresh/ -> /token/refresh/
-    return handleRequest(
-      async () => {
-        const response = await apiClient.post('/token/refresh/', { refresh: refreshToken });
-        localStorage.setItem('accessToken', response.data.access);
-        return response;
-      },
-      'Failed to refresh token'
-    );
-  },
-  
-  /**
-   * Checks if the user is authenticated based on stored token
-   * @returns {Boolean} - Authentication status
-   */
-  isAuthenticated: () => {
-    return !!localStorage.getItem('accessToken');
+    console.error(`Public API error:`, error);
+    
+    const errorDetails = error.response?.data?.detail || 
+                        error.response?.data?.message || 
+                        error.message || 
+                        errorMessage || 
+                        'API request failed';
+    
+    throw new Error(errorDetails);
   }
 };
 
-/**
- * Subscription-related services
- * Handles operations for user subscription management and tiered access
- * NOTE: Some endpoints may need to be implemented on the backend
- */
-export const subscriptionService = {
-  /**
-   * Retrieves the current user's subscription
-   * @returns {Promise} - Current subscription details
-   */
-  getCurrentSubscription: async () => {
-    // This endpoint may need to be verified or implemented on the backend
-    return handleRequest(
-      async () => await apiClient.get('/user/sessions/'), // This is a placeholder, update with actual endpoint
-      'Failed to retrieve subscription information'
-    );
-  },
+const createFormData = (data) => {
+  const formData = new FormData();
+  const snakeData = camelToSnake(data);
   
-  /**
-   * Upgrades user to a paid subscription tier
-   * @param {String} tier - Subscription tier (basic, premium)
-   * @param {Object} paymentData - Payment details
-   * @returns {Promise} - Updated subscription details
-   */
-  upgradeSubscription: async (tier, paymentData = {}) => {
-    // This endpoint may need to be verified or implemented on the backend
-    return handleRequest(
-      async () => await apiClient.post('/user/subscription/upgrade/', {
-        tier,
-        payment_method: paymentData.paymentMethod || 'credit_card',
-        auto_renew: paymentData.autoRenew !== false
-      }),
-      'Failed to upgrade subscription'
-    );
-  },
+  Object.entries(snakeData).forEach(([key, value]) => {
+    if (value instanceof File) {
+      formData.append(key, value);
+    }
+    else if (Array.isArray(value)) {
+      value.forEach(item => {
+        formData.append(`${key}[]`, item);
+      });
+    }
+    else if (value !== null && typeof value === 'object') {
+      formData.append(key, JSON.stringify(value));
+    }
+    else if (value !== null && value !== undefined) {
+      formData.append(key, value);
+    }
+  });
   
-  /**
-   * Cancels the current paid subscription
-   * @returns {Promise} - Updated subscription details
-   */
-  cancelSubscription: async () => {
-    // This endpoint may need to be verified or implemented on the backend
-    return handleRequest(
-      async () => await apiClient.post('/user/subscription/cancel/'),
-      'Failed to cancel subscription'
-    );
-  },
-  
-  /**
-   * Downgrades to a lower subscription tier at the end of the current billing period
-   * @param {String} tier - Target tier to downgrade to
-   * @returns {Promise} - Updated subscription details
-   */
-  downgradeSubscription: async (tier = 'free') => {
-    // This endpoint may need to be verified or implemented on the backend
-    return handleRequest(
-      async () => await apiClient.post('/user/subscription/downgrade/', { tier }),
-      'Failed to downgrade subscription'
-    );
-  }
+  return formData;
 };
 
-/**
- * Course-related services
- * Handles operations for courses, modules, lessons, enrollments, and reviews
- */
-export const courseService = {
-  /**
-   * Retrieves all courses with optional filtering
-   * @param {Object} params - Query parameters for filtering and pagination
-   * @returns {Promise} - List of courses
-   */
+const courseService = {
   getAllCourses: async (params = {}) => {
-    // Correct path: /api/courses/ -> /courses/
     return handleRequest(
-      async () => await apiClient.get('/courses/', { params }),
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.BASE, { params }),
       'Failed to fetch courses'
     );
   },
   
-  /**
-   * Retrieves a course by its slug
-   * @param {String} slug - Course slug
-   * @returns {Promise} - Course details
-   */
   getCourseBySlug: async (slug) => {
-    // Correct path: /api/courses/<slug>/ -> /courses/<slug>/
-    return handleRequest(
-      async () => await apiClient.get(`/courses/${slug}/`),
-      `Failed to fetch course ${slug}`
-    );
+    console.log(`Getting course by slug: ${slug}`);
+    
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.COURSE.COURSE_BY_SLUG(slug)),
+        `Failed to fetch course ${slug}`
+      );
+    } catch (error) {
+      console.error(`Error fetching course: ${error.message}`);
+      throw error;
+    }
   },
   
-  /**
-   * Enrolls the current user in a course
-   * @param {String} slug - Course slug
-   * @returns {Promise} - Enrollment details
-   */
   enrollInCourse: async (slug) => {
-    // Correct path: /api/courses/<slug>/enroll/ -> /courses/<slug>/enroll/
     return handleRequest(
-      async () => await apiClient.post(`/courses/${slug}/enroll/`),
+      async () => await apiClient.post(API_ENDPOINTS.COURSE.ENROLL(slug)),
       `Failed to enroll in course ${slug}`
     );
   },
   
-  /**
-   * Retrieves all modules for a specific course
-   * @param {String} slug - Course slug
-   * @returns {Promise} - List of modules
-   */
-  getCourseModules: async (slug) => {
-    // Correct path: /api/courses/<slug>/modules/ -> /courses/<slug>/modules/
+  createCourse: async (courseData, thumbnailFile) => {
+    const formData = thumbnailFile 
+      ? prepareCourseFormData(courseData, thumbnailFile)
+      : createFormData(courseData);
+    
     return handleRequest(
-      async () => await apiClient.get(`/courses/${slug}/modules/`),
+      async () => await apiClient.post(API_ENDPOINTS.COURSE.BASE, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }),
+      'Failed to create course'
+    );
+  },
+  
+  updateCourse: async (slug, courseData, thumbnailFile) => {
+    const formData = thumbnailFile 
+      ? prepareCourseFormData(courseData, thumbnailFile)
+      : createFormData(courseData);
+    
+    return handleRequest(
+      async () => await apiClient.put(API_ENDPOINTS.COURSE.COURSE_BY_SLUG(slug), formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }),
+      `Failed to update course ${slug}`
+    );
+  },
+  
+  getCourseModules: async (slug) => {
+    return handleRequest(
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.MODULES(slug)),
       `Failed to fetch modules for course ${slug}`
     );
   },
   
-  /**
-   * Retrieves details for a specific module
-   * @param {Number|String} moduleId - Module ID
-   * @returns {Promise} - Module details including lessons
-   */
   getModuleDetails: async (moduleId) => {
-    // Correct path: /api/modules/<pk>/ -> /modules/<moduleId>/
     return handleRequest(
-      async () => await apiClient.get(`/modules/${moduleId}/`),
+      async () => await apiClient.get(API_ENDPOINTS.MODULE.DETAILS(moduleId)),
       `Failed to fetch module details for module ${moduleId}`
     );
   },
   
-  /**
-   * Retrieves all lessons for a specific module
-   * @param {Number|String} moduleId - Module ID
-   * @returns {Promise} - List of lessons
-   */
   getModuleLessons: async (moduleId) => {
-    // Correct path: /api/modules/<pk>/lessons/ -> /modules/<moduleId>/lessons/
     return handleRequest(
-      async () => await apiClient.get(`/modules/${moduleId}/lessons/`),
+      async () => await apiClient.get(API_ENDPOINTS.MODULE.LESSONS(moduleId)),
       `Failed to fetch lessons for module ${moduleId}`
     );
   },
   
-  /**
-   * Retrieves details for a specific lesson
-   * @param {Number|String} lessonId - Lesson ID
-   * @returns {Promise} - Lesson details including content and resources
-   */
-  getLessonDetails: async (lessonId) => {
-    // Correct path: /api/lessons/<pk>/ -> /lessons/<lessonId>/
-    return handleRequest(
-      async () => await apiClient.get(`/lessons/${lessonId}/`),
-      `Failed to fetch lesson details for lesson ${lessonId}`
-    );
+  getLessonDetails: async (lessonId, isPublicContent = false, isAuthenticated = false, options = {}) => {
+    if (typeof isPublicContent === 'object') {
+      options = isPublicContent;
+      isPublicContent = options.isPublicContent || false;
+      isAuthenticated = options.isAuthenticated || false;
+    }
+    
+    const moduleData = options.moduleData || null;
+    const moduleId = options.moduleId || null;
+    const signal = options.signal || null;
+    
+    console.log(`Getting lesson details for ${lessonId}, isPublic: ${isPublicContent}, isAuth: ${isAuthenticated}, hasSignal: ${!!signal}`);
+    
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1000;
+    const useLocalStorage = typeof window !== 'undefined' && window.localStorage;
+    
+    const startTime = performance.now();
+    let source = 'api';
+    
+    let cachedContent = null;
+    let fallbackContent = null;
+    
+    if (useLocalStorage) {
+      try {
+        const contentCacheKey = `content_cache_lesson_${lessonId}`;
+        cachedContent = contentCache.get(contentCacheKey);
+        
+        if (cachedContent) {
+          fallbackContent = cachedContent;
+          source = 'cache';
+          console.log('Using cached lesson content');
+        }
+        
+        if (!cachedContent && moduleId) {
+          const moduleContentKey = `content_cache_module_${moduleId}`;
+          const moduleCachedData = contentCache.get(moduleContentKey);
+          
+          if (moduleCachedData?.lessons) {
+            const cachedLesson = moduleCachedData.lessons.find(l => l.id.toString() === lessonId.toString());
+            if (cachedLesson && cachedLesson.content) {
+              console.log('Using cached lesson content from module cache');
+              cachedContent = cachedLesson;
+              fallbackContent = cachedLesson;
+              source = 'module-cache';
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error accessing cached lesson content:', error);
+      }
+    }
+    
+    const fetchWithRetry = async (fetchFn) => {
+      let lastError = null;
+      
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`Retry attempt ${attempt} for lesson ${lessonId}`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+          }
+          
+          return await fetchFn();
+        } catch (error) {
+          lastError = error;
+          
+          if (error.name === 'AbortError' || error.message === 'canceled') {
+            console.log(`Lesson fetch aborted for ${lessonId}`);
+            throw error;
+          }
+          
+          console.error(`Attempt ${attempt} failed for lesson ${lessonId}:`, error);
+          
+          if (attempt === MAX_RETRIES) {
+            if (fallbackContent) {
+              console.warn(`Using fallback content after ${MAX_RETRIES+1} failed attempts`);
+              return fallbackContent;
+            }
+            throw error;
+          }
+        }
+      }
+    };
+    
+    try {
+      if (isAuthenticated) {
+        console.log('Using authenticated request for lesson content');
+        
+        const response = await fetchWithRetry(async () => {
+          const result = await handleRequest(
+            async () => {
+              const requestOptions = {
+                headers: {
+                  ...apiClient.defaults.headers,
+                  'X-Force-Auth': 'true'
+                }
+              };
+              
+              if (signal) {
+                requestOptions.signal = signal;
+              }
+              
+              return await apiClient.get(API_ENDPOINTS.LESSON.DETAILS(lessonId), requestOptions);
+            },
+            `Failed to fetch lesson details for lesson ${lessonId}`
+          );
+          return result;
+        });
+        
+        if (cachedContent?.content && 
+            response.content && 
+            cachedContent.content.length > response.content.length) {
+          console.log('Using cached content (longer than API response)');
+          response.content = cachedContent.content;
+          source = 'cache+api';
+        } else {
+          source = 'api';
+        }
+        
+        if (DEBUG_MODE) {
+          const duration = performance.now() - startTime;
+          console.log(`Lesson content fetch (${source}) took ${duration.toFixed(2)}ms`);
+        }
+        
+        if (useLocalStorage && response.content) {
+          const contentCacheKey = `content_cache_lesson_${lessonId}`;
+          contentCache.set(contentCacheKey, response);
+        }
+        
+        return response;
+      }
+      
+      if (isPublicContent) {
+        console.log('Using public request for freely accessible content');
+        
+        const publicOptions = {};
+        if (signal) {
+          publicOptions.signal = signal;
+        }
+        
+        const response = await fetchWithRetry(async () => {
+          return await handlePublicRequest(
+            API_ENDPOINTS.LESSON.DETAILS(lessonId),
+            `Failed to fetch public lesson details for lesson ${lessonId}`,
+            publicOptions
+          );
+        });
+        
+        if (cachedContent?.content && 
+            response.content && 
+            cachedContent.content.length > response.content.length) {
+          console.log('Using cached content (longer than API response)');
+          response.content = cachedContent.content;
+          source = 'cache+public';
+        } else {
+          source = 'public';
+        }
+        
+        if (DEBUG_MODE) {
+          const duration = performance.now() - startTime;
+          console.log(`Lesson content fetch (${source}) took ${duration.toFixed(2)}ms`);
+        }
+        
+        return response;
+      }
+      
+      const defaultOptions = {};
+      if (signal) {
+        defaultOptions.signal = signal;
+      }
+      
+      console.log('Using default API request for lesson content');
+      
+      const response = await fetchWithRetry(async () => {
+        return await handleRequest(
+          async () => await apiClient.get(API_ENDPOINTS.LESSON.DETAILS(lessonId), defaultOptions),
+          `Failed to fetch lesson details for lesson ${lessonId}`
+        );
+      });
+      
+      if (DEBUG_MODE) {
+        const duration = performance.now() - startTime;
+        console.log(`Lesson content fetch (${source}) took ${duration.toFixed(2)}ms`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`Error fetching lesson ${lessonId}:`, error);
+      
+      if (DEBUG_MODE) {
+        const duration = performance.now() - startTime;
+        console.log(`Lesson content fetch FAILED (${duration.toFixed(2)}ms)`);
+      }
+      
+      if (fallbackContent) {
+        console.warn(`Using fallback content after API error`);
+        return fallbackContent;
+      }
+      
+      throw error;
+    }
   },
   
-  /**
-   * Marks a lesson as completed
-   * @param {Number|String} lessonId - Lesson ID
-   * @param {Number} timeSpent - Time spent on lesson in seconds
-   * @returns {Promise} - Updated lesson progress
-   */
   completeLesson: async (lessonId, timeSpent = 0) => {
-    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.put(`/lessons/${lessonId}/complete/`, { time_spent: timeSpent }),
+      async () => await apiClient.put(
+        API_ENDPOINTS.LESSON.COMPLETE(lessonId), 
+        { timeSpent }
+      ),
       `Failed to mark lesson ${lessonId} as complete`
     );
   },
   
-  /**
-   * Retrieves all reviews for a specific course
-   * @param {String} slug - Course slug
-   * @returns {Promise} - List of reviews
-   */
   getCourseReviews: async (slug) => {
-    // Correct path: /api/courses/<slug>/reviews/ -> /courses/<slug>/reviews/
     return handleRequest(
-      async () => await apiClient.get(`/courses/${slug}/reviews/`),
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.REVIEWS(slug)),
       `Failed to fetch reviews for course ${slug}`
     );
   },
   
-  /**
-   * Adds a review for a specific course
-   * @param {String} slug - Course slug
-   * @param {Object} reviewData - Review data including rating and content
-   * @returns {Promise} - Created review
-   */
   addCourseReview: async (slug, reviewData) => {
-    // Correct path: /api/courses/<slug>/review/ -> /courses/<slug>/review/
     return handleRequest(
-      async () => await apiClient.post(`/courses/${slug}/review/`, reviewData),
+      async () => await apiClient.post(API_ENDPOINTS.COURSE.REVIEW(slug), reviewData),
       `Failed to add review for course ${slug}`
     );
   },
   
-  /**
-   * Updates a course review
-   * @param {String} slug - Course slug
-   * @param {Number|String} reviewId - Review ID
-   * @param {Object} reviewData - Updated review data
-   * @returns {Promise} - Updated review
-   */
   updateCourseReview: async (slug, reviewId, reviewData) => {
-    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.put(`/courses/${slug}/review/${reviewId}/`, reviewData),
+      async () => await apiClient.put(
+        API_ENDPOINTS.COURSE.UPDATE_REVIEW(slug, reviewId), 
+        reviewData
+      ),
       `Failed to update review ${reviewId}`
     );
   },
   
-  /**
-   * Deletes a course review
-   * @param {String} slug - Course slug
-   * @param {Number|String} reviewId - Review ID
-   * @returns {Promise} - Deletion result
-   */
   deleteCourseReview: async (slug, reviewId) => {
-    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.delete(`/courses/${slug}/review/${reviewId}/`),
+      async () => await apiClient.delete(API_ENDPOINTS.COURSE.UPDATE_REVIEW(slug, reviewId)),
       `Failed to delete review ${reviewId}`
     );
   },
   
-  /**
-   * Searches courses by keyword
-   * @param {String} query - Search query
-   * @returns {Promise} - Search results
-   */
   searchCourses: async (query) => {
-    // This endpoint may need verification - not directly visible in URL list
     return handleRequest(
-      async () => await apiClient.get('/courses/', { params: { q: query } }),
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.BASE, { params: { q: query } }),
       'Course search failed'
     );
   },
   
-  /**
-   * Retrieves featured courses
-   * @param {Number} limit - Number of courses to retrieve
-   * @returns {Promise} - List of featured courses
-   */
   getFeaturedCourses: async (limit = 3) => {
-    // Uses course list endpoint with filter parameter
-    return handleRequest(
-      async () => await apiClient.get('/courses/', { params: { is_featured: true, limit } }),
-      'Failed to fetch featured courses'
-    );
-  }
-};
-
-/**
- * Assessment-related services
- * Handles operations for assessments, attempts, and submissions
- * NOTE: Some endpoints may need to be implemented or verified on the backend
- */
-export const assessmentService = {
-  /**
-   * Retrieves details for a specific assessment
-   * @param {Number|String} assessmentId - Assessment ID
-   * @returns {Promise} - Assessment details including questions
-   */
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.COURSE.FEATURED, { params: { limit } }),
+        'Failed to fetch featured courses'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK) {
+        throw error;
+      }
+      
+      logWarning('Falling back to mock featured courses data', { error });
+      
+      return [
+        {
+          id: 1,
+          title: "Introduction to Programming",
+          instructor: "John Smith",
+          category: "Computer Science",
+          rating: 4.8,
+          students: 1200,
+          image: "/images/courses/programming-intro.jpg"
+        },
+        {
+          id: 2,
+          title: "Web Development Bootcamp",
+          instructor: "Maria Johnson",
+          category: "Web Development",
+          rating: 4.9,
+          students: 2500,
+          image: "/images/courses/web-dev.jpg"
+        },
+        {
+          id: 3,
+          title: "Data Science Fundamentals",
+          instructor: "Robert Chen",
+          category: "Data Science",
+          rating: 4.7,
+          students: 1800,
+          image: "/images/courses/data-science.jpg"
+        }
+      ];
+    }
+  },
+  
   getAssessmentDetails: async (assessmentId) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get(`/assessments/${assessmentId}/`),
-      `Failed to fetch assessment ${assessmentId}`
+      async () => await apiClient.get(API_ENDPOINTS.ASSESSMENT.DETAILS(assessmentId)),
+      `Failed to fetch assessment details for assessment ${assessmentId}`
     );
   },
   
-  /**
-   * Starts a new assessment attempt
-   * @param {Number|String} assessmentId - Assessment ID
-   * @returns {Promise} - New assessment attempt details
-   */
   startAssessment: async (assessmentId) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.post(`/assessments/${assessmentId}/start/`),
+      async () => await apiClient.post(API_ENDPOINTS.ASSESSMENT.START(assessmentId)),
       `Failed to start assessment ${assessmentId}`
     );
   },
   
-  /**
-   * Submits answers for an assessment attempt
-   * @param {Number|String} attemptId - Assessment attempt ID
-   * @param {Array} answers - List of answers
-   * @returns {Promise} - Assessment results
-   */
   submitAssessment: async (attemptId, answers) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.put(`/assessment-attempts/${attemptId}/submit/`, { answers }),
+      async () => await apiClient.put(API_ENDPOINTS.ASSESSMENT.SUBMIT(attemptId), answers),
       `Failed to submit assessment attempt ${attemptId}`
-    );
-  },
-  
-  /**
-   * Retrieves all assessment attempts for the current user
-   * @returns {Promise} - List of assessment attempts
-   */
-  getUserAssessmentAttempts: async () => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get('/user/assessment-attempts/'),
-      'Failed to fetch assessment attempts'
-    );
-  },
-  
-  /**
-   * Retrieves details for a specific assessment attempt
-   * @param {Number|String} attemptId - Assessment attempt ID
-   * @returns {Promise} - Assessment attempt details
-   */
-  getAssessmentAttempt: async (attemptId) => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get(`/assessment-attempts/${attemptId}/`),
-      `Failed to fetch assessment attempt ${attemptId}`
-    );
-  },
-  
-  /**
-   * Gets assessment questions for practice
-   * @param {Number|String} lessonId - Lesson ID
-   * @returns {Promise} - Practice questions
-   */
-  getPracticeQuestions: async (lessonId) => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get(`/lessons/${lessonId}/practice/`),
-      `Failed to fetch practice questions for lesson ${lessonId}`
     );
   }
 };
 
-/**
- * User progress-related services
- * Handles operations for tracking user progress through courses
- * NOTE: Some endpoints may need to be implemented or verified on the backend
- */
-export const progressService = {
-  /**
-   * Retrieves all enrollments for the current user
-   * @returns {Promise} - List of enrollments
-   */
-  getUserEnrollments: async () => {
-    // This endpoint exists in URL listings: /api/enrollments/ -> /enrollments/
+const assessmentService = {
+  getUserAssessmentAttempts: async () => {
     return handleRequest(
-      async () => await apiClient.get('/enrollments/'),
+      async () => await apiClient.get(API_ENDPOINTS.USER.ASSESSMENT_ATTEMPTS),
+      'Failed to fetch assessment attempts'
+    );
+  }
+};
+
+const progressService = {
+  getUserEnrollments: async () => {
+    return handleRequest(
+      async () => await apiClient.get(API_ENDPOINTS.USER.ENROLLMENTS),
       'Failed to fetch enrollments'
     );
   },
   
-  /**
-   * Retrieves progress for a specific course
-   * @param {Number|String} courseId - Course ID or slug
-   * @returns {Promise} - Course progress details
-   */
   getUserProgress: async (courseId) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get(`/user/progress/${courseId}/`),
+      async () => await apiClient.get(API_ENDPOINTS.USER.PROGRESS.COURSE(courseId)),
       `Failed to fetch progress for course ${courseId}`
     );
   },
   
-  /**
-   * Retrieves overall user progress statistics
-   * @returns {Promise} - Progress statistics
-   */
   getUserProgressStats: async () => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get('/user/progress/stats/'),
-      'Failed to fetch progress statistics'
-    );
-  },
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.USER.PROGRESS.STATS),
+        'Failed to fetch progress statistics'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK) {
+          throw error;
+        }
+        
+        logWarning('Falling back to mock progress statistics data', { error });
+        return {
+          totalCourses: 0,
+          coursesInProgress: 0,
+          coursesCompleted: 0,
+          totalLessons: 0,
+          completedLessons: 0,
+          completionPercentage: 0,
+          hoursSpent: 0,
+          recentActivity: []
+        };
+      }
+    }
+  };
   
-  /**
-   * Updates user's last activity timestamp
-   * @param {Number|String} courseId - Course ID
-   * @returns {Promise} - Updated activity record
-   */
-  updateLastActivity: async (courseId) => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.post(`/user/activity/${courseId}/`),
-      `Failed to update activity for course ${courseId}`
-    );
-  },
-  
-  /**
-   * Retrieves learning recommendations for the user
-   * @returns {Promise} - Personalized recommendations
-   */
-  getLearningRecommendations: async () => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get('/user/recommendations/'),
-      'Failed to fetch learning recommendations'
-    );
-  }
-};
-
-/**
- * Notes-related services
- * Handles operations for user notes associated with lessons
- * NOTE: Endpoint may need to be implemented or verified on the backend
- */
-export const noteService = {
-  /**
-   * Retrieves all notes for the current user
-   * @returns {Promise} - List of notes
-   */
+const noteService = {
   getUserNotes: async () => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get('/notes/'),
+      async () => await apiClient.get(API_ENDPOINTS.NOTE.BASE),
       'Failed to fetch notes'
     );
   },
   
-  /**
-   * Retrieves notes for a specific lesson
-   * @param {Number|String} lessonId - Lesson ID
-   * @returns {Promise} - List of notes for the lesson
-   */
   getNotesForLesson: async (lessonId) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get('/notes/', { params: { lesson: lessonId } }),
+      async () => await apiClient.get(API_ENDPOINTS.NOTE.BASE, { params: { lesson: lessonId } }),
       `Failed to fetch notes for lesson ${lessonId}`
     );
   },
   
-  /**
-   * Creates a new note
-   * @param {Object} noteData - Note data including lesson ID and content
-   * @returns {Promise} - Created note
-   */
   createNote: async (noteData) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.post('/notes/', noteData),
+      async () => await apiClient.post(API_ENDPOINTS.NOTE.BASE, noteData),
       'Failed to create note'
     );
   },
   
-  /**
-   * Updates an existing note
-   * @param {Number|String} noteId - Note ID
-   * @param {Object} noteData - Updated note data
-   * @returns {Promise} - Updated note
-   */
   updateNote: async (noteId, noteData) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.put(`/notes/${noteId}/`, noteData),
+      async () => await apiClient.put(API_ENDPOINTS.NOTE.DETAIL(noteId), noteData),
       `Failed to update note ${noteId}`
     );
   },
   
-  /**
-   * Deletes a note
-   * @param {Number|String} noteId - Note ID
-   * @returns {Promise} - Deletion result
-   */
   deleteNote: async (noteId) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.delete(`/notes/${noteId}/`),
+      async () => await apiClient.delete(API_ENDPOINTS.NOTE.DETAIL(noteId)),
       `Failed to delete note ${noteId}`
     );
   }
 };
 
-/**
- * Forum and discussion-related services
- * Handles operations for course discussions, questions, and answers
- * NOTE: These endpoints may need to be implemented on the backend
- */
-export const forumService = {
-  /**
-   * Retrieves all discussions for a course
-   * @param {String} courseSlug - Course slug
-   * @returns {Promise} - List of discussions
-   */
+const forumService = {
   getCourseDiscussions: async (courseSlug) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.get(`/courses/${courseSlug}/discussions/`),
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.DISCUSSIONS(courseSlug)),
       `Failed to fetch discussions for course ${courseSlug}`
     );
   },
   
-  /**
-   * Retrieves a specific discussion
-   * @param {String} courseSlug - Course slug
-   * @param {Number|String} discussionId - Discussion ID
-   * @returns {Promise} - Discussion details
-   */
   getDiscussion: async (courseSlug, discussionId) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.get(`/courses/${courseSlug}/discussions/${discussionId}/`),
+      async () => await apiClient.get(API_ENDPOINTS.COURSE.DISCUSSION(courseSlug, discussionId)),
       `Failed to fetch discussion ${discussionId}`
     );
   },
   
-  /**
-   * Creates a new discussion
-   * @param {String} courseSlug - Course slug
-   * @param {Object} discussionData - Discussion data
-   * @returns {Promise} - Created discussion
-   */
   createDiscussion: async (courseSlug, discussionData) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.post(`/courses/${courseSlug}/discussions/`, discussionData),
+      async () => await apiClient.post(API_ENDPOINTS.COURSE.DISCUSSIONS(courseSlug), discussionData),
       'Failed to create discussion'
     );
   },
   
-  /**
-   * Adds a reply to a discussion
-   * @param {String} courseSlug - Course slug
-   * @param {Number|String} discussionId - Discussion ID
-   * @param {Object} replyData - Reply data
-   * @returns {Promise} - Created reply
-   */
   addDiscussionReply: async (courseSlug, discussionId, replyData) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.post(`/courses/${courseSlug}/discussions/${discussionId}/replies/`, replyData),
+      async () => await apiClient.post(
+        API_ENDPOINTS.COURSE.DISCUSSION_REPLIES(courseSlug, discussionId), 
+        replyData
+      ),
       `Failed to add reply to discussion ${discussionId}`
     );
   }
 };
 
-/**
- * Virtual lab-related services
- * Handles operations for interactive lab exercises
- * NOTE: These endpoints may need to be implemented on the backend
- */
-export const virtualLabService = {
-  /**
-   * Retrieves details for a specific lab
-   * @param {Number|String} labId - Lab ID or lesson ID with lab
-   * @returns {Promise} - Lab details
-   */
+const virtualLabService = {
   getLabDetails: async (labId) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.get(`/labs/${labId}/`),
+      async () => await apiClient.get(API_ENDPOINTS.LAB.DETAILS(labId)),
       `Failed to fetch lab ${labId}`
     );
   },
   
-  /**
-   * Starts a lab session
-   * @param {Number|String} labId - Lab ID
-   * @returns {Promise} - Lab session details
-   */
   startLabSession: async (labId) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.post(`/labs/${labId}/start/`),
+      async () => await apiClient.post(API_ENDPOINTS.LAB.START(labId)),
       `Failed to start lab ${labId}`
     );
   },
   
-  /**
-   * Submits a lab solution
-   * @param {Number|String} labId - Lab ID
-   * @param {Object} solutionData - Solution data
-   * @returns {Promise} - Evaluation result
-   */
   submitLabSolution: async (labId, solutionData) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.post(`/labs/${labId}/submit/`, solutionData),
+      async () => await apiClient.post(
+        API_ENDPOINTS.LAB.SUBMIT(labId), 
+        solutionData
+      ),
       `Failed to submit solution for lab ${labId}`
-    );
-  },
-  
-  /**
-   * Retrieves lab progress history
-   * @param {Number|String} labId - Lab ID
-   * @returns {Promise} - Lab progress history
-   */
-  getLabProgress: async (labId) => {
-    // Endpoint path may need verification or implementation
-    return handleRequest(
-      async () => await apiClient.get(`/labs/${labId}/progress/`),
-      `Failed to fetch progress for lab ${labId}`
     );
   }
 };
 
-/**
- * Category-related services
- * Handles operations for course categories
- */
-export const categoryService = {
-  /**
-   * Retrieves all categories
-   * @returns {Promise} - List of categories
-   */
+const categoryService = {
   getAllCategories: async () => {
-    // Correct path: /api/categories/ -> /categories/
     return handleRequest(
-      async () => await apiClient.get('/categories/'),
+      async () => await apiClient.get(API_ENDPOINTS.CATEGORY.BASE),
       'Failed to fetch categories'
     );
   },
   
-  /**
-   * Retrieves courses for a specific category
-   * @param {String} categorySlug - Category slug
-   * @returns {Promise} - List of courses in the category
-   */
   getCoursesByCategory: async (categorySlug) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get(`/categories/${categorySlug}/courses/`),
+      async () => await apiClient.get(API_ENDPOINTS.CATEGORY.COURSES(categorySlug)),
       `Failed to fetch courses for category ${categorySlug}`
     );
   }
 };
 
-/**
- * System-related services
- * Handles operations for system status, database, and admin operations
- */
-export const systemService = {
-  /**
-   * Checks database connection status
-   * @returns {Promise} - Database status information
-   */
-  checkDbStatus: async () => {
-    // Correct path: /api/system/db-status/ -> /system/db-status/
-    return handleRequest(
-      async () => await apiClient.get('/system/db-status/'),
-      'Database status check failed'
-    );
-  },
-  
-  /**
-   * Retrieves database statistics
-   * @returns {Promise} - Database statistics
-   */
-  getDbStats: async () => {
-    // Correct path: /api/system/db-stats/ -> /system/db-stats/
-    return handleRequest(
-      async () => await apiClient.get('/system/db-stats/'),
-      'Failed to get database statistics'
-    );
-  },
-  
-  /**
-   * Retrieves system health information
-   * @returns {Promise} - System health data
-   */
-  getSystemHealth: async () => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get('/system/health/'),
-      'Failed to get system health information'
-    );
-  }
-};
-
-/**
- * Certificate-related services
- * Handles operations for course completion certificates
- * NOTE: Some endpoints may need to be implemented on the backend
- */
-export const certificateService = {
-  /**
-   * Retrieves all certificates for the current user
-   * @returns {Promise} - List of certificates
-   */
+const certificateService = {
   getUserCertificates: async () => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get('/certificates/'),
+      async () => await apiClient.get(API_ENDPOINTS.CERTIFICATE.BASE),
       'Failed to fetch certificates'
     );
   },
   
-  /**
-   * Generates a certificate for a completed course
-   * @param {String} courseSlug - Course slug
-   * @returns {Promise} - Certificate details
-   */
   generateCertificate: async (courseSlug) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.post(`/courses/${courseSlug}/certificate/`),
+      async () => await apiClient.post(API_ENDPOINTS.COURSE.CERTIFICATE(courseSlug)),
       `Failed to generate certificate for course ${courseSlug}`
     );
   },
   
-  /**
-   * Retrieves a specific certificate
-   * @param {Number|String} certificateId - Certificate ID
-   * @returns {Promise} - Certificate details
-   */
-  getCertificate: async (certificateId) => {
-    // Endpoint path may need verification
-    return handleRequest(
-      async () => await apiClient.get(`/certificates/${certificateId}/`),
-      `Failed to fetch certificate ${certificateId}`
-    );
-  },
-  
-  /**
-   * Verifies a certificate by its verification code
-   * @param {String} verificationCode - Certificate verification code
-   * @returns {Promise} - Verification result
-   */
   verifyCertificate: async (verificationCode) => {
-    // Endpoint path may need verification
     return handleRequest(
-      async () => await apiClient.get(`/certificates/verify/${verificationCode}/`),
+      async () => await apiClient.get(API_ENDPOINTS.CERTIFICATE.VERIFY(verificationCode)),
       'Certificate verification failed'
     );
   }
 };
 
-// Blog services
-export const blogService = {
-  /**
-   * Get latest blog posts
-   * @param {Number} limit - Number of posts to retrieve
-   * @returns {Promise} - List of blog posts
-   */
+const blogService = {
   getLatestPosts: async (limit = 3) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.get('/blog/posts/', { params: { limit } }),
+      async () => await apiClient.get(API_ENDPOINTS.BLOG.POSTS, { params: { limit } }),
       'Failed to fetch latest blog posts'
     );
   },
   
-  /**
-   * Get blog post by slug
-   * @param {String} slug - Blog post slug
-   * @returns {Promise} - Blog post details
-   */
   getPostBySlug: async (slug) => {
-    // Endpoint path may need verification or implementation
     return handleRequest(
-      async () => await apiClient.get(`/blog/posts/${slug}/`),
+      async () => await apiClient.get(API_ENDPOINTS.BLOG.POST_BY_SLUG(slug)),
       `Failed to fetch blog post ${slug}`
     );
+  }
+};
+
+const systemService = {
+  checkApiStatus: async () => {
+    return handleRequest(
+      async () => await apiClient.get(API_ENDPOINTS.SYSTEM.STATUS),
+      'API status check failed'
+    );
   },
   
-  /**
-   * Get blog posts by category
-   * @param {String} category - Category slug
-   * @param {Object} params - Query parameters
-   * @returns {Promise} - List of blog posts in category
-   */
-  getPostsByCategory: async (category, params = {}) => {
-    // Endpoint path may need verification or implementation
+  checkDbStatus: async () => {
     return handleRequest(
-      async () => await apiClient.get(`/blog/categories/${category}/posts/`, { params }),
-      `Failed to fetch posts in category ${category}`
+      async () => await apiClient.get(API_ENDPOINTS.SYSTEM.DB_STATUS),
+      'Database status check failed'
     );
   }
 };
 
-// Testimonial services
-export const testimonialService = {
-  /**
-   * Get featured testimonials
-   * @param {Number} limit - Number of testimonials to retrieve
-   * @returns {Promise} - List of testimonials
-   */
-  getFeaturedTestimonials: async (limit = 3) => {
-    // Endpoint path may need verification or implementation
-    return handleRequest(
-      async () => await apiClient.get('/testimonials/featured/', { params: { limit } }),
-      'Failed to fetch featured testimonials'
-    );
-  },
-  
-  /**
-   * Get testimonials for a specific course
-   * @param {String} courseSlug - Course slug
-   * @returns {Promise} - List of course testimonials
-   */
-  getCourseTestimonials: async (courseSlug) => {
-    // Endpoint path may need verification or implementation
-    return handleRequest(
-      async () => await apiClient.get(`/courses/${courseSlug}/testimonials/`),
-      `Failed to fetch testimonials for course ${courseSlug}`
-    );
-  }
-};
-
-// Statistics services
-export const statisticsService = {
-  /**
-   * Get platform-wide statistics
-   * @returns {Promise} - Platform statistics
-   */
+const statisticsService = {
   getPlatformStats: async () => {
-    // Endpoint path may need verification or implementation
-    return handleRequest(
-      async () => await apiClient.get('/statistics/platform/'),
-      'Failed to fetch platform statistics'
-    );
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.STATISTICS.PLATFORM),
+        'Failed to fetch platform statistics'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK || !(error.response && error.response.status === 404)) {
+        throw error;
+      }
+      
+      logWarning('Statistics endpoint not available, using mock data', { error });
+      return {
+        totalCourses: 150,
+        totalStudents: 12500,
+        totalInstructors: 48
+      };
+    }
   },
   
-  /**
-   * Get course category statistics
-   * @returns {Promise} - Category statistics
-   */
-  getCategoryStats: async () => {
-    // Endpoint path may need verification or implementation
+  getUserLearningStats: async () => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.STATISTICS.USER),
+        'Failed to fetch user learning statistics'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK || !(error.response && error.response.status === 404)) {
+        throw error;
+      }
+      
+      logWarning('User statistics endpoint not available, using mock data', { error });
+      return {
+        coursesCompleted: 0,
+        hoursSpent: 0,
+        averageScore: 0
+      };
+    }
+  },
+  
+  getInstructorTeachingStats: async () => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.STATISTICS.INSTRUCTOR),
+        'Failed to fetch instructor teaching statistics'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK || !(error.response && error.response.status === 404)) {
+        throw error;
+      }
+      
+      logWarning('Instructor statistics endpoint not available, using mock data', { error });
+      return {
+        totalStudents: 0,
+        coursesCreated: 0,
+        averageRating: 0
+      };
+    }
+  }
+};
+
+const testimonialService = {
+  getFeaturedTestimonials: async (limit = 3) => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.TESTIMONIAL.FEATURED, { params: { limit } }),
+        'Failed to fetch featured testimonials'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK || !(error.response && error.response.status === 404)) {
+        throw error;
+      }
+      
+      logWarning('Testimonials endpoint not available, using mock data', { error });
+      return [
+        {
+          id: 1,
+          name: "Jane Smith",
+          role: "Software Engineer",
+          content: "This platform helped me transition from a junior to senior developer in just 6 months.",
+          rating: 5,
+          avatar: "/images/avatars/avatar-1.jpg"
+        },
+        {
+          id: 2,
+          name: "Michael Johnson",
+          role: "Data Scientist",
+          content: "The data science courses here are comprehensive and practical. I use what I learned daily.",
+          rating: 5,
+          avatar: "/images/avatars/avatar-2.jpg"
+        },
+        {
+          id: 3,
+          name: "Sarah Williams",
+          role: "UX Designer",
+          content: "The design courses completely changed how I approach user experience. Highly recommended!",
+          rating: 4,
+          avatar: "/images/avatars/avatar-3.jpg"
+        }
+      ];
+    }
+  },
+  
+  getAllTestimonials: async (params = {}) => {
+    try {
+      return await handleRequest(
+        async () => await apiClient.get(API_ENDPOINTS.TESTIMONIAL.BASE, { params }),
+        'Failed to fetch testimonials'
+      );
+    } catch (error) {
+      if (!ALLOW_MOCK_FALLBACK || !(error.response && error.response.status === 404)) {
+        throw error;
+      }
+      
+      logWarning('Testimonials endpoint not available, using mock data', { error });
+      return [
+        {
+          id: 1,
+          name: "Jane Smith",
+          role: "Software Engineer",
+          content: "This platform helped me transition from a junior to senior developer in just 6 months.",
+          rating: 5,
+          avatar: "/images/avatars/avatar-1.jpg"
+        },
+        {
+          id: 2,
+          name: "Michael Johnson",
+          role: "Data Scientist",
+          content: "The data science courses here are comprehensive and practical. I use what I learned daily.",
+          rating: 5,
+          avatar: "/images/avatars/avatar-2.jpg"
+        },
+        {
+          id: 3,
+          name: "Sarah Williams",
+          role: "UX Designer",
+          content: "The design courses completely changed how I approach user experience. Highly recommended!",
+          rating: 4,
+          avatar: "/images/avatars/avatar-3.jpg"
+        }
+      ];
+    }
+  },
+  
+  submitTestimonial: async (testimonialData) => {
     return handleRequest(
-      async () => await apiClient.get('/statistics/categories/'),
-      'Failed to fetch category statistics'
+      async () => await apiClient.post(API_ENDPOINTS.TESTIMONIAL.BASE, testimonialData),
+      'Failed to submit testimonial'
     );
   }
 };
 
+const apiUtils = {
+  snakeToCamel,
+  camelToSnake,
+  createFormData,
+  contentCache,
+  
+  isNetworkError: (error) => {
+    return !error.response && error.request;
+  },
+  
+  isAuthError: (error) => {
+    return error.response && error.response.status === 401;
+  },
+  
+  formatErrorMessage: (error) => {
+    if (!error) return 'An unknown error occurred';
+    
+    if (error.message) return error.message;
+    if (error.details?.detail) return error.details.detail;
+    if (error.details?.message) return error.details.message;
+    if (error.originalError?.message) return error.originalError.message;
+    
+    return 'An error occurred while processing your request';
+  }
+};
 
-/**
- * Exports all services as a default object
- * This allows importing the entire API or individual services as needed
- */
-export default {
+const api = {
+  auth: authService,
+  subscription: subscriptionService,
+  course: courseService,
+  assessment: assessmentService,
+  progress: progressService,
+  note: noteService,
+  forum: forumService,
+  virtualLab: virtualLabService,
+  category: categoryService,
+  certificate: certificateService,
+  blog: blogService,
+  system: systemService,
+  statistics: statisticsService,
+  testimonial: testimonialService,
+  
+  login: authService.login,
+  register: authService.register,
+  getCurrentUser: authService.getCurrentUser,
+  logout: authService.logout,
+  isAuthenticated: authService.isAuthenticated,
+  
+  utils: apiUtils
+};
+
+export {
   authService,
   subscriptionService,
   courseService,
@@ -1207,10 +1496,12 @@ export default {
   forumService,
   virtualLabService,
   categoryService,
-  systemService,
   certificateService,
   blogService,
-  testimonialService,
+  systemService,
   statisticsService,
-  
+  testimonialService,
+  apiUtils
 };
+
+export default api;

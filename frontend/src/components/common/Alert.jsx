@@ -1,80 +1,158 @@
-import React, { useState } from 'react';
+// fmt: off
+// isort: skip_file
+// Timestamp: 2024-07-07 - Fixed circular reference errors in Alert component
+
+import React from 'react';
+import PropTypes from 'prop-types';
 
 /**
- * Alert component for displaying notification messages
- * @param {Object} props - Component props
- * @param {string} props.type - Alert type: 'success', 'error', 'warning', 'info'
- * @param {string} props.message - Alert message content
- * @param {boolean} props.dismissible - Whether the alert can be dismissed
- * @param {function} props.onDismiss - Callback when alert is dismissed
+ * Alert Component
+ * 
+ * Displays informational, success, warning, or error messages to the user
+ * with appropriate styling and iconography.
+ * 
+ * @param {Object} props Component props
+ * @param {string} props.type Alert type: 'info', 'success', 'warning', 'error'
+ * @param {React.ReactNode} props.children Alert content
+ * @param {string} props.className Additional CSS classes
+ * @param {Function} props.onClose Optional close handler
  */
 const Alert = ({ 
-  type = 'info',
-  message,
-  dismissible = true,
-  onDismiss = () => {},
-  className = ''
+  type = 'info', 
+  children, 
+  className = '',
+  onClose,
+  dismissible = true
 }) => {
-  const [visible, setVisible] = useState(true);
+  if (!children) return null;
 
-  // Color classes based on alert type
+  // Define styles based on alert type
   const alertStyles = {
-    success: 'bg-green-100 border-green-500 text-green-700',
-    error: 'bg-red-100 border-red-500 text-red-700',
-    warning: 'bg-yellow-100 border-yellow-500 text-yellow-700',
-    info: 'bg-blue-100 border-blue-500 text-blue-700'
+    info: 'bg-blue-50 border-blue-500 text-blue-800',
+    success: 'bg-green-50 border-green-500 text-green-800',
+    warning: 'bg-yellow-50 border-yellow-500 text-yellow-800',
+    error: 'bg-red-50 border-red-500 text-red-800',
   };
 
-  // Icon based on alert type
-  const alertIcons = {
-    success: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-      </svg>
-    ),
-    error: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-      </svg>
-    ),
-    warning: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-      </svg>
-    ),
-    info: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-      </svg>
-    )
+  // Helper function to safely stringify objects without circular references
+  const safeStringify = (obj, maxDepth = 3, depth = 0) => {
+    if (depth > maxDepth) return '[Object]';
+    
+    try {
+      if (obj === null || obj === undefined) return String(obj);
+      if (typeof obj !== 'object') return String(obj);
+      
+      if (Array.isArray(obj)) {
+        return obj.map(item => safeStringify(item, maxDepth, depth + 1)).join(', ');
+      }
+      
+      const pairs = [];
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          const value = obj[key];
+          pairs.push(`${key}: ${safeStringify(value, maxDepth, depth + 1)}`);
+        }
+      }
+      return `{ ${pairs.join(', ')} }`;
+    } catch (error) {
+      return '[Circular or complex object]';
+    }
   };
 
-  const handleDismiss = () => {
-    setVisible(false);
-    onDismiss();
+  // Helper function to format different error message types
+  const renderContent = () => {
+    if (typeof children === 'string') {
+      // Check if the message contains newlines - if so, split and render as list
+      if (children.includes('\n')) {
+        const lines = children.split('\n').filter(line => line.trim() !== '');
+        return (
+          <ul className="list-disc list-inside">
+            {lines.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        );
+      }
+      return <p>{children}</p>;
+    } else if (typeof children === 'object' && children !== null) {
+      if (Array.isArray(children)) {
+        return (
+          <ul className="list-disc list-inside">
+            {children.map((item, index) => (
+              <li key={index}>
+                {typeof item === 'object' ? safeStringify(item) : String(item)}
+              </li>
+            ))}
+          </ul>
+        );
+      }
+      
+      // Handle error objects
+      if (children instanceof Error) {
+        return <p>{children.message || 'An error occurred'}</p>;
+      }
+      
+      // Handle special error response objects from API
+      if (children.response && children.response.data) {
+        const errorData = children.response.data;
+        
+        // Format error messages from various API response structures
+        if (typeof errorData === 'string') {
+          return <p>{errorData}</p>;
+        } else if (Array.isArray(errorData)) {
+          return (
+            <ul className="list-disc list-inside">
+              {errorData.map((msg, idx) => (
+                <li key={idx}>{typeof msg === 'object' ? safeStringify(msg) : String(msg)}</li>
+              ))}
+            </ul>
+          );
+        } else if (typeof errorData === 'object') {
+          // Extract error messages from nested object
+          return (
+            <ul className="list-disc list-inside">
+              {Object.entries(errorData).map(([key, value]) => (
+                <li key={key}>
+                  <strong>{key}:</strong> {typeof value === 'object' ? safeStringify(value) : String(value)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+      }
+      
+      // For simple message objects with a single message property
+      if (children.message) {
+        return <p>{children.message}</p>;
+      }
+      
+      // For other objects, stringify them safely
+      return <p>{safeStringify(children)}</p>;
+    }
+    
+    // Fallback for any other type
+    return <p>{String(children)}</p>;
   };
-
-  if (!visible) {
-    return null;
-  }
 
   return (
-    <div className={`border-l-4 p-4 mb-4 rounded ${alertStyles[type]} ${className}`} role="alert">
-      <div className="flex items-center">
-        <div className="flex-shrink-0 mr-3">
-          {alertIcons[type]}
-        </div>
+    <div className={`border-l-4 p-4 mb-4 ${alertStyles[type]} ${className}`}>
+      <div className="flex justify-between items-start">
         <div className="flex-grow">
-          <p className="font-medium">{message}</p>
+          {renderContent()}
         </div>
-        {dismissible && (
+        
+        {dismissible && onClose && (
           <button 
-            onClick={handleDismiss}
-            className="ml-auto -mx-1.5 -my-1.5 bg-transparent text-current p-1.5 rounded-lg focus:ring-2 focus:ring-gray-400 hover:bg-gray-200 inline-flex items-center justify-center"
+            onClick={onClose}
+            className="ml-4 text-gray-500 hover:text-gray-800 focus:outline-none"
             aria-label="Close"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+              <path 
+                fillRule="evenodd" 
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" 
+                clipRule="evenodd" 
+              />
             </svg>
           </button>
         )}
@@ -83,8 +161,25 @@ const Alert = ({
   );
 };
 
-// Named export
-export { Alert };
+Alert.propTypes = {
+  /** Alert type - controls color scheme */
+  type: PropTypes.oneOf(['info', 'success', 'warning', 'error']),
+  
+  /** Alert content - can be text, components, or an error object */
+  children: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.object,
+    PropTypes.array,
+  ]),
+  
+  /** Additional CSS classes */
+  className: PropTypes.string,
+  
+  /** Close button handler */
+  onClose: PropTypes.func,
+  
+  /** Whether the alert is dismissible */
+  dismissible: PropTypes.bool
+};
 
-// Default export
 export default Alert;

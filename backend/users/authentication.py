@@ -61,9 +61,10 @@ class CustomJWTAuthentication(JWTAuthentication):
 def jwt_response_payload_handler(token, user=None, request=None):
     """
     Custom response payload handler for JWT authentication.
+    Updated to use 'access' key for consistency with SimpleJWT.
     """
     return {
-        'token': token,
+        'access': token,
         'user': {
             'id': user.id,
             'email': user.email,

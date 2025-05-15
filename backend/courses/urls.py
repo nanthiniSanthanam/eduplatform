@@ -37,6 +37,9 @@ router.register(r'certificates', views.CertificateViewSet,
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Explicit course detail URL to ensure proper routing
+    path('courses/<slug:slug>/', views.CourseViewSet.as_view(
+        {'get': 'retrieve'}), name='course-detail-explicit'),
     path('lessons/<int:pk>/detail/',
          views.LessonDetailView.as_view(), name='lesson-detail'),
     path('lessons/<int:pk>/complete/',
@@ -51,4 +54,11 @@ urlpatterns = [
          name='user-enrollments'),
     path('user/courses/<int:course_id>/progress/',
          views.UserProgressView.as_view(), name='user-course-progress'),
+    path('user/progress/stats/',
+         views.UserProgressStatsView.as_view(), name='user-progress-stats'),
+
+    # Debug endpoint for course slugs
+    path('debug/courses/by-slug/<slug:slug>/',
+         views.CourseViewSet.as_view({'get': 'retrieve'}),
+         name='debug-course-detail'),
 ]

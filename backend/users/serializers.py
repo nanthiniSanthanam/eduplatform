@@ -15,18 +15,22 @@ These serializers convert database models to/from API-friendly formats and handl
 - Access control based on subscription tiers
 
 Variables to modify:
-- PASSWORD_MIN_LENGTH: Minimum password length for validation
+- PASSWORD_MIN_LENGTH: Minimum password length for validation (currently 8)
 - Role choices in UserCreateSerializer if user roles change
+
+CHANGES (2025-05-05 17:54:11 by nanthiniSanthanam):
+- Removed Subscription creation from UserCreateSerializer.create() to prevent duplicate 
+  subscription records since Subscription.create_for_user() is already called in RegisterView.create()
+- This resolves the inconsistency between serializer and view for user creation flow
+- Left Profile creation intact as it's handled automatically by User.create_user() through signals
 
 Connected files:
 1. users/models.py - Database models being serialized
-2. users/views.py - Views using these serializers
+2. users/views.py - Views using these serializers (RegisterView creates Subscription records)
 3. courses/serializers.py - Course serializers using user data
 4. frontend/src/services/api.js - Frontend API client
 5. frontend/src/contexts/AuthContext.jsx - Frontend authentication logic
 
-Created by: Professor Santhanam
-Last updated: 2025-04-28 17:09:49
 """
 
 from rest_framework import serializers
@@ -125,7 +129,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     This handles:
     - Password validation and confirmation
     - Creation of related profile
-    - Initial subscription setup
+    - Initial user setup
     """
     password = serializers.CharField(
         write_only=True,
@@ -185,6 +189,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """
         Create a new user with encrypted password and initial profile.
+        Profile is automatically created via signal in CustomUserManager.
+        Subscription is created in the view via Subscription.create_for_user().
         """
         user = User.objects.create_user(
             email=validated_data['email'],
@@ -195,14 +201,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
             role=validated_data['role'],
         )
 
-        # Profile is automatically created by model signal
-
-        # Create default free subscription
-        Subscription.objects.create(
-            user=user,
-            tier='free',
-            status='active'
-        )
+        # Note: Subscription creation is now handled in RegisterView.create()
+        # via Subscription.create_for_user(user) to avoid duplication
 
         return user
 

@@ -1,997 +1,1117 @@
 /**
  * File: frontend/src/pages/courses/CourseContentPage.jsx
- * Purpose: Display course content with tiered access control for educational platform
+ * Version: 1.0.0
+ * Date: 2025-05-15 14:45:00
+ * Author: Developed by GitHub Copilot based on project requirements
  * 
- * This component implements a three-tier access model for an educational platform:
- * 1. Unregistered users: Can view basic preview content without logging in
- * 2. Registered users: Can access intermediate content, take notes, and track progress
- * 3. Paid users: Can access advanced content, certificates, and premium resources
+ * Course Content Page component for displaying lesson content with tiered access
  * 
- * Key features:
- * - Content access control based on user subscription tier
- * - Course navigation with modules and lessons
- * - Progress tracking for authenticated users
- * - Note-taking functionality for authenticated users
- * - Assessment and lab access with authentication checks
- * - Certificate generation for course completion (premium users)
+ * This component:
+ * 1. Displays lesson content according to user's access level
+ * 2. Provides tabbed interface for content, resources, assessments, and notes
+ * 3. Tracks user progress through the course
+ * 4. Supports navigation between lessons and modules
+ * 5. Implements note-taking functionality for users
  * 
- * Variables that may need modification:
- * - ACCESS_LEVEL_MESSAGES: Customize messages shown for locked content
- * - DEFAULT_PREVIEW_CONTENT: Modify the default preview content for unregistered users
- * 
- * Functions:
- * - completeLesson(): Marks lessons as completed for tracking progress
- * - handleSaveNote(): Saves user notes for a specific lesson
- * - navigateToLesson(): Handles navigation between lessons
- * - findNavigation(): Determines previous and next lessons for navigation controls
- * 
- * Important Note: This file is configured to allow basic content viewing for unregistered 
- * users while protecting premium features that require authentication.
- * 
- * Created by: Professor Santhanam
- * Last updated: 2025-04-27
+ * Access levels handled:
+ * - basic: Unregistered users - preview content
+ * - intermediate: Registered users - standard content
+ * - advanced: Premium/paid users - full content with premium resources
  */
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import ReactPlayer from 'react-player';
 import { 
-  Button, 
-  Card, 
-  Badge, 
-  ProgressBar, 
-  Tabs, 
-  Accordion, 
-  AnimatedElement,
-  Tooltip,
-  Alert
+  Button, Card, Badge, Spinner, Tabs, 
+  ProgressBar, LoadingScreen, ContentAccessController 
 } from '../../components/common';
-import { Header } from '../../components/layouts';
-import { courseService, noteService } from '../../services/api';
+import { courseService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import ContentAccessController from '../../components/common/ContentAccessController';
+import { MainLayout } from '../../components/layouts';
 
-// Custom messages for different access levels - modify these to change user prompts
-const ACCESS_LEVEL_MESSAGES = {
-  basic: "Register for free to access this complete lesson",
-  intermediate: "Upgrade to a premium subscription to access advanced content and exercises",
-  advanced: "This advanced content is available to premium subscribers only"
+// Tab identifiers
+const TABS = {
+  CONTENT: 'content',
+  RESOURCES: 'resources',
+  ASSESSMENT: 'assessment',
+  NOTES: 'notes'
 };
 
-/**
- * Default preview content template for unregistered users
- * @param {string} title - The lesson title to display in the preview
- * @returns {string} HTML content string for the preview section
- */
-const DEFAULT_PREVIEW_CONTENT = (title) => `
-  <h2>${title} - Preview</h2>
-  <p>This is a preview of the lesson content. Register or upgrade for full access.</p>
-  <div class="bg-gray-100 p-4 rounded my-4">
-    <h3>What you'll learn</h3>
-    <ul>
-      <li>Key concept overview</li>
-      <li>Basic terminology</li>
-      <li>Foundation principles</li>
-    </ul>
-  </div>
-  <p>To access the full content with exercises and assessments, please register for a free account.</p>
-`;
-
 const CourseContentPage = () => {
-  // Get route parameters from URL
-  const { courseSlug, moduleId = '1', lessonId = '1' } = useParams();
+  const { courseSlug, moduleId, lessonId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
+  const { isAuthenticated, currentUser, getAccessLevel, canAccessContent } = useAuth();
   
-  // Get authentication context values
-  const { currentUser, isAuthenticated, getAccessLevel } = useAuth();
+  const userAccessLevel = getAccessLevel();
   
-  // Component state management
-  const [activeTab, setActiveTab] = useState('content');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // State management
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [courseData, setCourseData] = useState(null);
-  const [currentModule, setCurrentModule] = useState(null);
-  const [currentLesson, setCurrentLesson] = useState(null);
-  const [userNotes, setUserNotes] = useState([]);
-  const [noteContent, setNoteContent] = useState('');
-  const [progress, setProgress] = useState({
-    completed: 0,
-    total: 0,
-    percentage: 0
-  });
-
-  // Load course data - allowing preview for unregistered users
+  const [course, setCourse] = useState(null);
+  const [module, setModule] = useState(null);
+  const [lesson, setLesson] = useState(null);
+  const [modules, setModules] = useState([]);
+  const [activeTab, setActiveTab] = useState(TABS.CONTENT);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [userNote, setUserNote] = useState('');
+  const [savedNotes, setSavedNotes] = useState([]);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [markingComplete, setMarkingComplete] = useState(false);
+  
+  // Refs
+  const contentRef = useRef(null);
+  const noteInputRef = useRef(null);
+  
+  // Effect for fetching course data
   useEffect(() => {
-    const fetchCourseData = async () => {
+    const fetchCourseDetails = async () => {
       try {
         setLoading(true);
         
-        // Get module details including lessons
-        const moduleResponse = await courseService.getModuleDetails(moduleId);
-        setCurrentModule(moduleResponse.data);
-        
-        // Get course data from the module's parent course
+        // Fetch course details first
         const courseResponse = await courseService.getCourseBySlug(courseSlug);
-        setCourseData(courseResponse.data);
+        const courseData = courseResponse.data || courseResponse;
         
-        // Get the current lesson
-        const lessonResponse = await courseService.getLessonDetails(lessonId);
-        setCurrentLesson(lessonResponse.data);
+        setCourse(courseData);
         
-        // Get user progress for authenticated users only
-        if (isAuthenticated() && courseResponse.data.user_progress) {
-          setProgress(courseResponse.data.user_progress);
+        // Set modules from course data
+        if (courseData.modules?.length > 0) {
+          setModules(courseData.modules);
         }
         
         setLoading(false);
       } catch (err) {
-        console.error('Failed to load course data:', err);
-        setError('Failed to load course content. Please try again later.');
+        console.error('Failed to fetch course details:', err);
+        setError('Failed to load course information. Please try again later.');
         setLoading(false);
       }
     };
-
-    // Allow anyone to fetch course data, authenticated or not
-    fetchCourseData();
-  }, [courseSlug, moduleId, lessonId, isAuthenticated]);
-
-  // Load user notes when tab changes (only for authenticated users)
+    
+    fetchCourseDetails();
+  }, [courseSlug]);
+  
+  // Effect for fetching module and lesson data
   useEffect(() => {
-    const fetchNotes = async () => {
-      if (activeTab === 'notes' && currentLesson && isAuthenticated()) {
-        try {
-          const response = await noteService.getNotesForLesson(currentLesson.id);
-          setUserNotes(response.data);
-        } catch (err) {
-          console.error('Failed to load notes:', err);
+    const fetchModuleAndLesson = async () => {
+      if (!moduleId || !lessonId) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch module details
+        const moduleResponse = await courseService.getModuleDetails(moduleId);
+        const moduleData = moduleResponse.data || moduleResponse;
+        setModule(moduleData);
+        
+        // Find the current lesson in the module
+        const currentLesson = moduleData?.lessons?.find(l => l.id.toString() === lessonId.toString());
+        
+        if (currentLesson) {
+          setLesson(currentLesson);
+          
+          // If lesson has assessment and tab isn't already set, show assessment tab
+          if (currentLesson.has_assessment && activeTab !== TABS.ASSESSMENT) {
+            // Keep on content tab by default, user can click to see assessment
+            setActiveTab(TABS.CONTENT);
+          }
+          
+          // Fetch user notes for this lesson if authenticated
+          if (isAuthenticated) {
+            try {
+              const notesResponse = await courseService.note.getNotesForLesson(lessonId);
+              const notesData = notesResponse.data || notesResponse;
+              if (notesData && notesData.length > 0) {
+                setSavedNotes(notesData);
+                // Set the most recent note as the current note
+                setUserNote(notesData[0].content);
+              }
+            } catch (noteErr) {
+              console.warn('Failed to fetch notes:', noteErr);
+              // Non-critical error, don't show to user
+            }
+          }
+        } else {
+          console.error('Lesson not found in module');
+          setError('Lesson not found. It may have been moved or deleted.');
         }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to fetch module or lesson:', err);
+        setError('Failed to load lesson content. Please try again later.');
+        setLoading(false);
       }
     };
-
-    fetchNotes();
-  }, [activeTab, currentLesson, isAuthenticated]);
-
-  /**
-   * Handles saving a note for the current lesson
-   * Only works for authenticated users
-   */
+    
+    fetchModuleAndLesson();
+  }, [moduleId, lessonId, isAuthenticated]);
+  
+  // Scroll to top when lesson changes
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTo(0, 0);
+    }
+    
+    // Reset video progress when lesson changes
+    setVideoProgress(0);
+    
+    // Reset active tab when lesson changes (but keep on assessment if coming to a lesson with an assessment)
+    if (lesson?.has_assessment) {
+      setActiveTab(prevTab => prevTab === TABS.ASSESSMENT ? TABS.ASSESSMENT : TABS.CONTENT);
+    } else {
+      setActiveTab(TABS.CONTENT);
+    }
+  }, [lessonId]);
+  
+  // Handle saving notes
   const handleSaveNote = async () => {
-    if (!noteContent.trim() || !currentLesson || !isAuthenticated()) return;
+    if (!isAuthenticated || !userNote.trim() || !lessonId) {
+      return;
+    }
     
     try {
-      await noteService.createNote({
-        lesson: currentLesson.id,
-        content: noteContent
-      });
+      setNoteSaving(true);
+      
+      // Check if we're updating an existing note or creating a new one
+      if (savedNotes.length > 0) {
+        await courseService.note.updateNote(savedNotes[0].id, {
+          lesson: lessonId,
+          content: userNote
+        });
+      } else {
+        await courseService.note.createNote({
+          lesson: lessonId,
+          content: userNote
+        });
+      }
       
       // Refresh notes
-      const response = await noteService.getNotesForLesson(currentLesson.id);
-      setUserNotes(response.data);
-      setNoteContent('');
+      const notesResponse = await courseService.note.getNotesForLesson(lessonId);
+      const notesData = notesResponse.data || notesResponse;
+      setSavedNotes(notesData);
+      
+      setNoteSaving(false);
     } catch (err) {
       console.error('Failed to save note:', err);
+      setNoteSaving(false);
+      // Show a simple inline error
+      alert('Failed to save your note. Please try again.');
     }
-  };
-
-  /**
-   * Marks the current lesson as completed to track progress
-   * Only works for authenticated users
-   */
-  const completeLesson = async () => {
-    if (!currentLesson || !isAuthenticated()) return;
-    
-    try {
-      const response = await courseService.completeLesson(currentLesson.id);
-      
-      // Update progress
-      setProgress(response.data.progress);
-      
-      // Update lesson in state
-      setCurrentLesson(prev => ({
-        ...prev,
-        is_completed: true
-      }));
-    } catch (err) {
-      console.error('Failed to mark lesson as complete:', err);
-    }
-  };
-
-  /**
-   * Navigates to a different lesson within the course
-   * @param {string} moduleId - The ID of the module to navigate to
-   * @param {string} lessonId - The ID of the lesson to navigate to
-   */
-  const navigateToLesson = (moduleId, lessonId) => {
-    navigate(`/courses/${courseSlug}/content/${moduleId}/${lessonId}`);
-  };
-
-  /**
-   * Determines the previous and next lessons for navigation
-   * @returns {Object} Object containing prevLink and nextLink navigation objects
-   */
-  const findNavigation = () => {
-    if (!courseData || !currentModule) return { prevLink: null, nextLink: null };
-    
-    // Get all modules
-    const modules = courseData.modules;
-    
-    // Find current module index
-    const currentModuleIndex = modules.findIndex(m => m.id.toString() === moduleId);
-    
-    // Find current lesson index
-    const lessons = currentModule.lessons;
-    const currentLessonIndex = lessons.findIndex(l => l.id.toString() === lessonId);
-    
-    let prevLink = null;
-    let nextLink = null;
-    
-    // Previous lesson
-    if (currentLessonIndex > 0) {
-      // Previous lesson in same module
-      prevLink = {
-        moduleId,
-        lessonId: lessons[currentLessonIndex - 1].id
-      };
-    } else if (currentModuleIndex > 0) {
-      // Last lesson of previous module
-      const prevModule = modules[currentModuleIndex - 1];
-      // We'd need to load the previous module's lessons
-      // For simplicity, we'll just navigate to the module
-      prevLink = {
-        moduleId: prevModule.id,
-        lessonId: '1' // Assuming at least one lesson
-      };
-    }
-    
-    // Next lesson
-    if (currentLessonIndex < lessons.length - 1) {
-      // Next lesson in same module
-      nextLink = {
-        moduleId,
-        lessonId: lessons[currentLessonIndex + 1].id
-      };
-    } else if (currentModuleIndex < modules.length - 1) {
-      // First lesson of next module
-      const nextModule = modules[currentModuleIndex + 1];
-      nextLink = {
-        moduleId: nextModule.id,
-        lessonId: '1' // Assuming at least one lesson
-      };
-    }
-    
-    return { prevLink, nextLink };
   };
   
-  const { prevLink, nextLink } = findNavigation();
-
-  // If loading or no data, show loading state
+  // Handle marking lesson as complete
+  const handleMarkComplete = async () => {
+    if (!isAuthenticated || !lessonId) {
+      return;
+    }
+    
+    try {
+      setMarkingComplete(true);
+      
+      // Calculate time spent (in seconds) - simplified version
+      const timeSpent = Math.floor(videoProgress) || 0;
+      
+      const response = await courseService.completeLesson(lessonId, timeSpent);
+      
+      // Update the UI to show lesson as completed
+      if (response && lesson) {
+        setLesson({
+          ...lesson,
+          is_completed: true
+        });
+        
+        // If course is available, update the progress information
+        if (course) {
+          setCourse({
+            ...course,
+            user_progress: response.progress
+          });
+        }
+        
+        // Show success message
+        alert('Lesson marked as complete!');
+      }
+      
+      setMarkingComplete(false);
+    } catch (err) {
+      console.error('Failed to mark lesson as complete:', err);
+      setMarkingComplete(false);
+      alert('Failed to mark lesson as complete. Please try again.');
+    }
+  };
+  
+  // Handle navigation to another lesson
+  const handleNavigateToLesson = (moduleId, lessonId) => {
+    navigate(`/courses/${courseSlug}/content/${moduleId}/${lessonId}`);
+  };
+  
+  // Get the next and previous lessons for navigation
+  const getAdjacentLessons = () => {
+    if (!modules.length || !moduleId || !lessonId) {
+      return { nextLesson: null, prevLesson: null };
+    }
+    
+    let currentModuleIndex = -1;
+    let currentLessonIndex = -1;
+    
+    // Find current indices
+    modules.forEach((mod, mIdx) => {
+      if (mod.id.toString() === moduleId.toString()) {
+        currentModuleIndex = mIdx;
+        
+        if (mod.lessons) {
+          mod.lessons.forEach((les, lIdx) => {
+            if (les.id.toString() === lessonId.toString()) {
+              currentLessonIndex = lIdx;
+            }
+          });
+        }
+      }
+    });
+    
+    // Calculate next lesson
+    let nextLesson = null;
+    
+    if (currentModuleIndex >= 0 && currentLessonIndex >= 0) {
+      const currentModule = modules[currentModuleIndex];
+      
+      // Check if there's another lesson in the same module
+      if (currentLessonIndex < currentModule.lessons.length - 1) {
+        nextLesson = {
+          moduleId: currentModule.id,
+          lessonId: currentModule.lessons[currentLessonIndex + 1].id
+        };
+      } 
+      // Check if there's another module
+      else if (currentModuleIndex < modules.length - 1) {
+        const nextModule = modules[currentModuleIndex + 1];
+        if (nextModule.lessons && nextModule.lessons.length > 0) {
+          nextLesson = {
+            moduleId: nextModule.id,
+            lessonId: nextModule.lessons[0].id
+          };
+        }
+      }
+    }
+    
+    // Calculate previous lesson
+    let prevLesson = null;
+    
+    if (currentModuleIndex >= 0 && currentLessonIndex >= 0) {
+      const currentModule = modules[currentModuleIndex];
+      
+      // Check if there's a previous lesson in the same module
+      if (currentLessonIndex > 0) {
+        prevLesson = {
+          moduleId: currentModule.id,
+          lessonId: currentModule.lessons[currentLessonIndex - 1].id
+        };
+      } 
+      // Check if there's a previous module
+      else if (currentModuleIndex > 0) {
+        const prevModule = modules[currentModuleIndex - 1];
+        if (prevModule.lessons && prevModule.lessons.length > 0) {
+          prevLesson = {
+            moduleId: prevModule.id,
+            lessonId: prevModule.lessons[prevModule.lessons.length - 1].id
+          };
+        }
+      }
+    }
+    
+    return { nextLesson, prevLesson };
+  };
+  
+  const { nextLesson, prevLesson } = getAdjacentLessons();
+  
+  // Get access level icon
+  const getAccessLevelIcon = (accessLevel) => {
+    switch(accessLevel || 'basic') {
+      case 'advanced':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+               className="w-4 h-4 text-amber-500" aria-label="Premium content">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        );
+      case 'intermediate':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+               className="w-4 h-4 text-blue-500" aria-label="Registered users">
+            <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+            <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+          </svg>
+        );
+      default: // basic
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+               className="w-4 h-4 text-green-500" aria-label="Free content">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+          </svg>
+        );
+    }
+  };
+  
+  // If loading, show loading screen
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <div className="flex-grow flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700 mx-auto mb-4"></div>
-            <p className="text-primary-700 font-medium">Loading course content...</p>
-          </div>
-        </div>
-      </div>
+      <MainLayout>
+        <LoadingScreen message="Loading course content..." />
+      </MainLayout>
     );
   }
-
+  
   // If error, show error message
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <div className="flex-grow flex items-center justify-center">
-          <div className="text-center max-w-md mx-auto">
-            <Alert type="error" title="Error Loading Course">
-              {error}
-            </Alert>
+      <MainLayout>
+        <div className="container mx-auto py-8 px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+              <p className="text-red-700">{error}</p>
+            </div>
             <Button 
               color="primary" 
-              className="mt-4"
-              onClick={() => navigate('/courses')}
+              onClick={() => navigate(`/courses/${courseSlug}`)}
             >
-              Back to Courses
+              Back to Course
             </Button>
           </div>
         </div>
-      </div>
+      </MainLayout>
     );
   }
-
-  // Determine user's access level - basic for unregistered, intermediate for registered, advanced for premium
-  const userAccessLevel = getAccessLevel ? getAccessLevel() : (isAuthenticated() ? 'intermediate' : 'basic');
-
-  // Main content render
-  return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Course Header with Progress */}
-      <div className="bg-white shadow-md py-3 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-2">
-          <div className="flex items-center mb-2 md:mb-0">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)} 
-              className="mr-3 p-2 rounded-md hover:bg-gray-100"
-              aria-label="Toggle sidebar"
+  
+  // If no lesson found, show not found message
+  if (!lesson) {
+    return (
+      <MainLayout>
+        <div className="container mx-auto py-8 px-4">
+          <div className="max-w-2xl mx-auto text-center">
+            <h1 className="text-2xl font-bold mb-4">Lesson Not Found</h1>
+            <p className="mb-6 text-gray-600">The lesson you're looking for could not be found.</p>
+            <Button 
+              color="primary" 
+              onClick={() => navigate(`/courses/${courseSlug}`)}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-xl font-display font-semibold text-gray-800">
-                {courseData?.title}
-              </h1>
-              <p className="text-sm text-gray-500">
-                {courseData?.instructors?.map(i => i.instructor.first_name + ' ' + i.instructor.last_name).join(', ')}
-              </p>
-            </div>
+              Back to Course
+            </Button>
           </div>
-
-          {/* Only show progress for authenticated users */}
-          {isAuthenticated() && (
-            <div className="w-full md:w-64">
-              <div className="flex justify-between mb-1 text-sm">
-                <span className="font-medium">Your progress</span>
-                <span>{progress.percentage}% complete</span>
-              </div>
-              <ProgressBar 
-                value={progress.percentage} 
-                color="primary"
-                height="small" 
-              />
-            </div>
-          )}
+        </div>
+      </MainLayout>
+    );
+  }
+  
+  return (
+    <MainLayout>
+      <div className="min-h-screen bg-gray-50">
+        {/* Breadcrumbs */}
+        <div className="bg-white border-b border-gray-200 py-3">
+          <div className="container mx-auto px-4">
+            <nav className="flex items-center text-sm">
+              <Link to="/courses" className="text-gray-500 hover:text-primary-600">
+                Courses
+              </Link>
+              <span className="mx-2 text-gray-500">/</span>
+              <Link to={`/courses/${courseSlug}`} className="text-gray-500 hover:text-primary-600">
+                {course?.title || 'Course'}
+              </Link>
+              <span className="mx-2 text-gray-500">/</span>
+              <span className="text-gray-800 font-medium truncate max-w-xs">
+                {lesson.title}
+              </span>
+            </nav>
+          </div>
         </div>
         
-        {/* Current lesson info */}
-        {currentModule && currentLesson && (
-          <div className="flex items-center text-sm text-gray-600 pl-10">
-            <span className="font-medium text-primary-700">{currentModule.title}</span>
-            <span className="mx-2">›</span>
-            <span>{currentLesson.title}</span>
+        {/* Course Progress Bar */}
+        {course?.user_progress && (
+          <div className="bg-white border-b border-gray-200 py-2">
+            <div className="container mx-auto px-4">
+              <div className="flex items-center">
+                <div className="w-full mr-4">
+                  <ProgressBar 
+                    progress={course.user_progress.percentage || 0} 
+                    showPercentage
+                    labelPosition="right"
+                    size="small"
+                  />
+                </div>
+                <div className="whitespace-nowrap text-sm font-medium">
+                  {course.user_progress.completed || 0}/{course.user_progress.total || 0} lessons
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </div>
-      
-      <div className="flex-grow flex">
-        {/* Course Navigation Sidebar */}
-        <div className={`bg-white shadow-md border-r border-gray-200 transition-all duration-300 ${
-          sidebarOpen ? 'w-72' : 'w-0'
-        } overflow-hidden lg:sticky lg:top-0 lg:h-screen`}>
-          <div className="p-4">
-            <h2 className="font-display font-semibold text-lg mb-4">Course Content</h2>
-            
-            <div className="space-y-2">
-              {courseData && courseData.modules.map((module, index) => (
-                <Accordion 
-                  key={module.id}
-                  title={
-                    <div className="flex items-center justify-between w-full">
-                      <div>
-                        <span className="font-display text-primary-700 mr-1">Module {index + 1}:</span> 
-                        <span className="font-medium">{module.title}</span>
-                      </div>
+        
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row">
+            {/* Sidebar (collapsible on mobile) */}
+            <div className={`md:w-1/4 md:block ${sidebarOpen ? 'block' : 'hidden'}`}>
+              <div className="bg-white rounded-lg shadow-sm p-4 md:sticky md:top-4">
+                {/* Sidebar Header */}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-lg">Course Content</h3>
+                  <button 
+                    onClick={() => setSidebarOpen(!sidebarOpen)} 
+                    className="md:hidden text-gray-500 hover:text-gray-700"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                {/* Module and Lesson Navigation */}
+                {modules.map((mod, index) => (
+                  <div key={mod.id} className="mb-3 last:mb-0">
+                    <div className="font-medium text-gray-700 mb-2 flex items-center">
+                      <span className="bg-gray-200 text-gray-700 rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2">
+                        {index + 1}
+                      </span>
+                      <span className="flex-1">{mod.title}</span>
                     </div>
-                  }
-                  defaultOpen={module.id.toString() === moduleId}
-                  headerClassName={module.isCompleted ? "border-l-4 border-green-500" : ""}
-                >
-                  {module.id.toString() === currentModule?.id.toString() ? (
-                    <div className="space-y-2 py-1">
-                      {currentModule.lessons.map((lesson) => {
-                        // Determine lesson status indicators
-                        const isCompleted = progress.completed_lessons?.includes(parseInt(lesson.id)) || false;
-                        const isActive = lesson.id.toString() === lessonId;
-                        const isLocked = lesson.access_level && 
-                          (lesson.access_level === 'advanced' && userAccessLevel !== 'advanced');
+                    
+                    <ul className="pl-7 space-y-1">
+                      {mod.lessons?.map((les) => {
+                        const isActive = les.id.toString() === lessonId;
+                        const hasCompleted = les.is_completed;
+                        
+                        // Determine access level
+                        const lessonAccessLevel = les.access_level || 'basic';
                         
                         return (
-                          <div 
-                            key={lesson.id}
-                            className={`flex items-center pl-2 py-2 pr-3 rounded-md cursor-pointer transition-colors ${
-                              isActive 
-                                ? 'bg-primary-50 text-primary-900' 
-                                : isCompleted 
-                                  ? 'text-gray-700 hover:bg-gray-50' 
-                                  : isLocked
-                                    ? 'text-gray-400 hover:bg-gray-50'
-                                    : 'text-gray-600 hover:bg-gray-50'
-                            }`}
-                            onClick={() => navigateToLesson(module.id, lesson.id)}
-                          >
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center mr-2 flex-shrink-0 ${
-                              isCompleted 
-                                ? 'bg-green-500' 
-                                : isActive 
-                                  ? 'bg-primary-500' 
-                                  : isLocked
-                                    ? 'bg-gray-300'
-                                    : 'bg-gray-200'
-                            }`}>
-                              {isCompleted && (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              {isLocked && (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="flex-grow min-w-0">
-                              <div className="text-sm font-medium truncate">
-                                {lesson.title}
-                                {isLocked && (
-                                  <span className="ml-1 text-xs font-normal text-amber-500">
-                                    (Premium)
-                                  </span>
+                          <li key={les.id}>
+                            <button
+                              onClick={() => handleNavigateToLesson(mod.id, les.id)}
+                              className={`w-full text-left py-1.5 px-3 rounded flex items-center ${
+                                isActive 
+                                  ? 'bg-primary-50 text-primary-600 font-medium' 
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <div className="flex-shrink-0 w-5 h-5 mr-2">
+                                {hasCompleted ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                ) : (
+                                  getAccessLevelIcon(lessonAccessLevel)
                                 )}
                               </div>
-                              <div className="flex items-center text-xs text-gray-500">
-                                <span>{lesson.type}</span>
-                                <span className="mx-1">•</span>
-                                <span>{lesson.duration}</span>
-                              </div>
-                            </div>
-                            {lesson.has_assessment && (
-                              <Tooltip content="Includes assessment">
-                                <span className="w-4 h-4 flex-shrink-0 ml-2">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                                  </svg>
-                                </span>
-                              </Tooltip>
-                            )}
-                            {lesson.has_lab && (
-                              <Tooltip content="Includes lab exercise">
-                                <span className="w-4 h-4 flex-shrink-0 ml-2">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z" clipRule="evenodd" />
-                                  </svg>
-                                </span>
-                              </Tooltip>
-                            )}
-                          </div>
+                              <span className="flex-1 text-sm">{les.title}</span>
+                            </button>
+                          </li>
                         );
                       })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Mobile sidebar toggle button - shown only on mobile */}
+            <button 
+              className="md:hidden fixed z-10 bottom-4 left-4 bg-primary-600 text-white rounded-full p-3 shadow-lg"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+              </svg>
+            </button>
+            
+            {/* Main lesson content */}
+            <div className="md:w-3/4 md:pl-6 mt-4 md:mt-0">
+              <div className="bg-white rounded-lg shadow-sm p-6" ref={contentRef}>
+                {/* Lesson Header */}
+                <div className="mb-6">
+                  <div className="flex items-center mb-1">
+                    <div className="flex items-center mr-3">
+                      {getAccessLevelIcon(lesson.access_level)}
+                      <span className="ml-1 text-sm text-gray-500">
+                        {lesson.access_level === 'advanced' ? 'Premium' : 
+                         lesson.access_level === 'intermediate' ? 'Registered' : 'Free'}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="py-2 px-2 text-sm text-gray-500 italic">
-                      Select this module to view lessons
+                    <Badge
+                      variant={lesson.is_completed ? "success" : "secondary"}
+                      size="small"
+                    >
+                      {lesson.is_completed ? "Completed" : "In Progress"}
+                    </Badge>
+                  </div>
+                  
+                  <h1 className="text-2xl font-bold">{lesson.title}</h1>
+                  
+                  {lesson.duration && (
+                    <div className="flex items-center mt-2 text-sm text-gray-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {lesson.duration}
                     </div>
                   )}
-                </Accordion>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Main Content Area */}
-        <div className="flex-grow">
-          <div className="container mx-auto py-6 px-4">
-            {currentModule && currentLesson ? (
-              <div>
-                {/* Content Nav Tabs */}
+                </div>
+                
+                {/* Tab Navigation */}
                 <Tabs
                   tabs={[
-                    { id: 'content', label: 'Lesson Content' },
-                    { id: 'resources', label: 'Resources' },
-                    { id: 'notes', label: 'My Notes' },
+                    { id: TABS.CONTENT, label: 'Content' },
+                    { id: TABS.RESOURCES, label: 'Resources', badge: lesson.resources?.length || 0 },
+                    { id: TABS.ASSESSMENT, label: 'Assessment', disabled: !lesson.has_assessment },
+                    { id: TABS.NOTES, label: 'Notes', disabled: !isAuthenticated }
                   ]}
                   activeTab={activeTab}
                   onChange={setActiveTab}
-                  className="mb-6"
                 />
                 
                 {/* Tab Content */}
-                <div className="bg-white shadow-md rounded-xl p-6 mb-6">
-                  {activeTab === 'content' && (
-                    <AnimatedElement type="fade-in">
-                      {/* Use ContentAccessController for tiered access */}
-                      <ContentAccessController
-                        requiredLevel={currentLesson.access_level || 'intermediate'}
-                        basicContent={
-                          <div className="prose prose-primary max-w-none">
-                            <div dangerouslySetInnerHTML={{ 
-                              __html: currentLesson.basic_content || DEFAULT_PREVIEW_CONTENT(currentLesson.title) 
-                            }} />
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
-                              <h3 className="font-semibold text-amber-800 mb-1">Free Preview</h3>
-                              <p className="text-amber-700">This is a preview of this lesson. Register for free to access the full content.</p>
-                            </div>
-                          </div>
-                        }
-                        intermediateContent={
-                          <div className="prose prose-primary max-w-none">
-                            {currentLesson.access_level === 'advanced' ? (
-                              <div>
-                                <div dangerouslySetInnerHTML={{ 
-                                  __html: currentLesson.intermediate_content || currentLesson.content 
-                                }} />
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
-                                  <h3 className="font-semibold text-amber-800 mb-1">Upgrade to Premium</h3>
-                                  <p className="text-amber-700">Subscribe to access advanced content, downloadable resources, and certificates.</p>
-                                </div>
-                              </div>
-                            ) : (
-                              <div dangerouslySetInnerHTML={{ __html: currentLesson.content || 'Content is being prepared...' }} />
-                            )}
-                            
-                            {/* Only show completion button for authenticated users */}
-                            {isAuthenticated() && !currentLesson.is_completed && (
-                              <div className="mt-8 border-t pt-6">
-                                <Button 
-                                  color="primary" 
-                                  size="medium" 
-                                  onClick={completeLesson}
-                                >
-                                  Mark as Completed
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {/* Only show assessment for authenticated users */}
-                            {isAuthenticated() && currentLesson.has_assessment && (
-                              <div className="mt-8 border-t pt-6">
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <div className="mt-6">
+                  {/* Content Tab */}
+                  {activeTab === TABS.CONTENT && (
+                    <div className="space-y-6">
+                      {/* Video content for video-type lessons */}
+                      {lesson.type === 'video' && (
+                        <div className="aspect-w-16 aspect-h-9 bg-black rounded-lg overflow-hidden mb-6">
+                          <ContentAccessController
+                            requiredLevel={lesson.access_level}
+                            isLoggedIn={isAuthenticated}
+                            userAccessLevel={userAccessLevel}
+                            basicContent={
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-white">
+                                <div className="text-center p-6">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                   </svg>
-                                  <div>
-                                    <h3 className="font-semibold text-amber-800 mb-1">Knowledge Check</h3>
-                                    <p className="text-amber-700 mb-3">Complete this quick assessment to check your understanding of the key concepts in this lesson.</p>
-                                    <Button 
-                                      color="secondary" 
-                                      size="small" 
-                                      className="font-medium"
-                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${currentLesson.id}`)}
-                                    >
-                                      Start Assessment
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        }
-                        advancedContent={
-                          <div className="prose prose-primary max-w-none">
-                            <div dangerouslySetInnerHTML={{ __html: currentLesson.content || 'Content is being prepared...' }} />
-                            
-                            {/* Advanced content elements like downloadable materials */}
-                            {currentLesson.premium_resources && currentLesson.premium_resources.length > 0 && (
-                              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
-                                <h3 className="text-green-800 font-semibold mb-2">Premium Resources</h3>
-                                <ul className="list-disc pl-5 space-y-2">
-                                  {currentLesson.premium_resources.map((resource, index) => (
-                                    <li key={index} className="text-green-700">
-                                      <a 
-                                        href={resource.url} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="text-primary-600 hover:underline"
-                                      >
-                                        {resource.title}
-                                      </a>
-                                      {resource.description && (
-                                        <p className="text-sm text-gray-600 mt-1">
-                                          {resource.description}
-                                        </p>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            
-                            {/* Only show completion button for authenticated users */}
-                            {isAuthenticated() && !currentLesson.is_completed && (
-                              <div className="mt-8 border-t pt-6">
-                                <Button 
-                                  color="primary" 
-                                  size="medium" 
-                                  onClick={completeLesson}
-                                >
-                                  Mark as Completed
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {/* Only show assessment for authenticated users */}
-                            {isAuthenticated() && currentLesson.has_assessment && (
-                              <div className="mt-8 border-t pt-6">
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <div>
-                                    <h3 className="font-semibold text-amber-800 mb-1">Knowledge Check</h3>
-                                    <p className="text-amber-700 mb-3">Complete this quick assessment to check your understanding of the key concepts in this lesson.</p>
-                                    <Button 
-                                      color="secondary" 
-                                      size="small" 
-                                      className="font-medium"
-                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${currentLesson.id}`)}
-                                    >
-                                      Start Assessment
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Only show lab for authenticated users */}
-                            {isAuthenticated() && currentLesson.has_lab && (
-                              <div className="mt-8 border-t pt-6">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                                  </svg>
-                                  <div>
-                                    <h3 className="font-semibold text-blue-800 mb-1">Hands-on Lab Exercise</h3>
-                                    <p className="text-blue-700 mb-3">Apply what you've learned in this interactive lab environment.</p>
-                                    <Button 
-                                      color="primary" 
-                                      size="small" 
-                                      className="font-medium"
-                                      onClick={() => navigate(`/courses/${courseSlug}/lab/${currentLesson.id}`)}
-                                    >
-                                      Open Virtual Lab
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Certificate eligibility notification for completed course (authenticated only) */}
-                            {isAuthenticated() && courseData.user_progress && courseData.user_progress.percentage >= 100 && (
-                              <div className="mt-8 border-t pt-6">
-                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <div>
-                                    <h3 className="font-semibold text-green-800 mb-1">Course Completed!</h3>
-                                    <p className="text-green-700 mb-3">Congratulations on completing this course. Your certificate is now available.</p>
-                                    <Button 
-                                      color="primary" 
-                                      size="small" 
-                                      className="font-medium"
-                                      onClick={() => navigate(`/certificates/${courseData.id}`)}
-                                    >
-                                      View Certificate
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        }
-                        upgradeMessage={ACCESS_LEVEL_MESSAGES[currentLesson.access_level || 'intermediate']}
-                      />
-                      
-                      {/* Only show lab button for authenticated intermediate+ users */}
-                      {isAuthenticated() && currentLesson.has_lab && userAccessLevel !== 'basic' && (
-                        <div className="mt-8 border-t pt-6">
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                            </svg>
-                            <div>
-                              <h3 className="font-semibold text-blue-800 mb-1">Hands-on Lab Exercise</h3>
-                              <p className="text-blue-700 mb-3">Apply what you've learned in this interactive lab environment.</p>
-                              <Button 
-                                color="primary" 
-                                size="small" 
-                                className="font-medium"
-                                onClick={() => navigate(`/courses/${courseSlug}/lab/${currentLesson.id}`)}
-                              >
-                                Open Virtual Lab
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </AnimatedElement>
-                  )}
-                  
-                  {/* Resources tab */}
-                  {activeTab === 'resources' && (
-                    <AnimatedElement type="fade-in">
-                      <h3 className="text-xl font-display font-semibold mb-4">Additional Resources</h3>
-                      {currentLesson.resources && currentLesson.resources.length > 0 ? (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {currentLesson.resources.map((resource) => (
-                            <Card key={resource.id} className="p-4 hover:shadow-md transition-shadow">
-                              <div className="flex items-start">
-                                <div className="mr-3 text-primary-600">
-                                  {resource.type === 'document' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
-                                  )}
-                                  {resource.type === 'video' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                  )}
-                                  {resource.type === 'link' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                    </svg>
-                                  )}
-                                  {resource.type === 'code' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                                    </svg>
-                                  )}
-                                  {resource.type === 'tool' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                  )}
-                                </div>
-                                <div>
-                                  <h4 className="font-medium text-primary-800 mb-1">{resource.title}</h4>
-                                  <p className="text-sm text-gray-600 mb-2">{resource.description}</p>
-                                  {/* Show access badge for premium resources */}
-                                  {resource.premium && (
-                                    <Badge color="amber" className="mb-2">Premium Resource</Badge>
-                                  )}
-                                  {resource.file && (
-                                    <ContentAccessController
-                                      requiredLevel={resource.premium ? 'advanced' : 'intermediate'}
-                                      basicContent={
-                                        <p className="text-sm text-gray-500">Sign in to download resources</p>
-                                      }
-                                      intermediateContent={
-                                        resource.premium ? (
-                                          <p className="text-sm text-gray-500">Upgrade to premium to download</p>
-                                        ) : (
-                                          <a 
-                                            href={resource.file} 
-                                            className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                          >
-                                            Download
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                            </svg>
-                                          </a>
-                                        )
-                                      }
-                                      advancedContent={
-                                        <a 
-                                          href={resource.file} 
-                                          className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          Download
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                          </svg>
-                                        </a>
-                                      }
-                                    />
-                                  )}
-                                  {resource.url && (
-                                    <ContentAccessController
-                                      requiredLevel={resource.premium ? 'advanced' : 'intermediate'}
-                                      basicContent={
-                                        <p className="text-sm text-gray-500">Sign in to access resources</p>
-                                      }
-                                      intermediateContent={
-                                        resource.premium ? (
-                                          <p className="text-sm text-gray-500">Upgrade to premium to access</p>
-                                        ) : (
-                                          <a 
-                                            href={resource.url} 
-                                            className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                          >
-                                            Visit Resource
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                              <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                              <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                            </svg>
-                                          </a>
-                                        )
-                                      }
-                                      advancedContent={
-                                        <a 
-                                          href={resource.url} 
-                                          className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          Visit Resource
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                          </svg>
-                                        </a>
-                                      }
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-gray-50 rounded-lg">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <p className="text-gray-600">No additional resources are available for this lesson.</p>
-                        </div>
-                      )}
-                    </AnimatedElement>
-                  )}
-                  
-                  {/* Notes tab - only for authenticated users */}
-                  {activeTab === 'notes' && (
-                    <AnimatedElement type="fade-in">
-                      <div>
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-xl font-display font-semibold">My Notes</h3>
-                        </div>
-                        
-                        <ContentAccessController
-                          requiredLevel="intermediate"
-                          basicContent={
-                            <div className="text-center py-8 bg-gray-50 rounded-lg">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                              <p className="text-gray-600 mb-4">You need to register to take notes on lessons.</p>
-                              <Button 
-                                color="primary" 
-                                size="small"
-                                onClick={() => navigate('/register', { state: { from: location.pathname } })}
-                              >
-                                Register for Free
-                              </Button>
-                            </div>
-                          }
-                          intermediateContent={
-                            <div>
-                              <div className="mb-6">
-                                <textarea 
-                                  className="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                                  placeholder="Type your notes here..."
-                                  value={noteContent}
-                                  onChange={(e) => setNoteContent(e.target.value)}
-                                ></textarea>
-                                <div className="flex justify-end mt-2">
-                                  <Button 
-                                    color="primary" 
-                                    size="small"
-                                    onClick={handleSaveNote}
-                                    disabled={!noteContent.trim()}
+                                  <h3 className="text-xl font-bold mb-2">Premium Content</h3>
+                                  <p className="mb-4">Sign up or upgrade your subscription to access this video.</p>
+                                  <Button
+                                    color="primary"
+                                    onClick={() => navigate('/login')}
                                   >
-                                    Save Note
+                                    Sign In to Access
                                   </Button>
                                 </div>
                               </div>
-                              
-                              {userNotes.length > 0 ? (
-                                <div className="space-y-4">
-                                  {userNotes.map(note => (
-                                    <div key={note.id} className="bg-gray-50 p-4 rounded-lg">
-                                      <div className="flex justify-between items-start mb-2">
-                                        <div className="text-sm text-gray-500">
-                                          {new Date(note.created_date).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          })}
-                                        </div>
-                                        <div className="flex space-x-2">
-                                          <button 
-                                            className="text-primary-600 hover:text-primary-800 text-sm"
-                                            onClick={() => {
-                                              setNoteContent(note.content);
-                                            }}
-                                          >
-                                            Edit
-                                          </button>
-                                          <button 
-                                            className="text-red-600 hover:text-red-800 text-sm"
-                                            onClick={async () => {
-                                              try {
-                                                await noteService.deleteNote(note.id);
-                                                setUserNotes(userNotes.filter(n => n.id !== note.id));
-                                              } catch (err) {
-                                                console.error('Failed to delete note:', err);
-                                              }
-                                            }}
-                                          >
-                                            Delete
-                                          </button>
-                                        </div>
-                                      </div>
-                                      <p className="text-gray-700 whitespace-pre-wrap">{note.content}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            }
+                          >
+                            <ReactPlayer
+                              url="https://www.youtube.com/watch?v=ysz5S6PUM-U"
+                              width="100%"
+                              height="100%"
+                              controls={true}
+                              onProgress={(progress) => {
+                                setVideoProgress(progress.playedSeconds);
+                              }}
+                              config={{
+                                youtube: {
+                                  playerVars: { modestbranding: 1 }
+                                }
+                              }}
+                            />
+                          </ContentAccessController>
+                        </div>
+                      )}
+                      
+                      {/* Lesson content - HTML rendering with access control */}
+                      <div className="prose prose-blue max-w-none">
+                        <ContentAccessController
+                          requiredLevel={lesson.access_level}
+                          isLoggedIn={isAuthenticated}
+                          userAccessLevel={userAccessLevel}
+                          content={lesson.content}
+                          basicContent={
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                              <div className="mb-4">
+                                <div className="flex items-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                   </svg>
-                                  <p className="text-gray-600">You haven't added any notes for this lesson yet.</p>
+                                  <h3 className="font-bold text-lg">Content Preview</h3>
+                                </div>
+                              </div>
+                              <div dangerouslySetInnerHTML={{ __html: lesson.basic_content || '<p>Sign in to access the full content of this lesson.</p>' }} />
+                              {!isAuthenticated && (
+                                <div className="mt-6 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                                  <Button
+                                    color="primary"
+                                    onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
+                                  >
+                                    Sign In
+                                  </Button>
+                                  <Button
+                                    color="secondary"
+                                    onClick={() => navigate('/register')}
+                                  >
+                                    Register
+                                  </Button>
                                 </div>
                               )}
                             </div>
                           }
+                          upgradeMessage={
+                            lesson.access_level === 'advanced' && userAccessLevel !== 'advanced' ? 
+                            "This premium content requires a subscription upgrade to access." :
+                            "Please sign in to access this content."
+                          }
                         />
                       </div>
-                    </AnimatedElement>
+                      
+                      {/* Completion and navigation buttons */}
+                      <div className="border-t border-gray-200 pt-6 mt-8 flex flex-col sm:flex-row sm:justify-between items-center space-y-4 sm:space-y-0">
+                        <div>
+                          {!lesson.is_completed && isAuthenticated && (
+                            <Button
+                              color="success"
+                              onClick={handleMarkComplete}
+                              disabled={markingComplete}
+                            >
+                              {markingComplete ? (
+                                <><Spinner color="white" size="small" /> Marking Complete...</>
+                              ) : (
+                                <>Mark as Complete</>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        
+                        <div className="flex space-x-4">
+                          {prevLesson && (
+                            <Button
+                              color="secondary"
+                              onClick={() => handleNavigateToLesson(prevLesson.moduleId, prevLesson.lessonId)}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Previous
+                            </Button>
+                          )}
+                          
+                          {nextLesson && (
+                            <Button
+                              color="primary"
+                              onClick={() => handleNavigateToLesson(nextLesson.moduleId, nextLesson.lessonId)}
+                            >
+                              Next
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Resources Tab */}
+                  {activeTab === TABS.RESOURCES && (
+                    <div>
+                      <h2 className="text-xl font-bold mb-4">Lesson Resources</h2>
+                      
+                      {/* Check if user has access to resources */}
+                      <ContentAccessController
+                        requiredLevel={lesson.access_level}
+                        isLoggedIn={isAuthenticated}
+                        userAccessLevel={userAccessLevel}
+                        basicContent={
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                            <h3 className="font-bold mb-2">Access Required</h3>
+                            <p className="mb-4">Sign in or upgrade your subscription to access resources for this lesson.</p>
+                            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                              <Button
+                                color="primary"
+                                onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
+                              >
+                                Sign In
+                              </Button>
+                              <Button
+                                color="secondary"
+                                onClick={() => navigate('/register')}
+                              >
+                                Register
+                              </Button>
+                            </div>
+                          </div>
+                        }
+                      >
+                        {lesson.resources && lesson.resources.length > 0 ? (
+                          <div className="space-y-4">
+                            {lesson.resources.map(resource => (
+                              <Card key={resource.id} className="flex items-center p-4">
+                                <div className="flex-shrink-0 mr-4 bg-gray-100 w-12 h-12 rounded-lg flex items-center justify-center">
+                                  {resource.type === 'document' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                  {resource.type === 'video' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                  {resource.type === 'link' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                  )}
+                                  {resource.type === 'code' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                    </svg>
+                                  )}
+                                  {resource.type === 'tool' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                  )}
+                                </div>
+                                
+                                <div className="flex-grow">
+                                  <h3 className="font-medium">{resource.title}</h3>
+                                  {resource.description && (
+                                    <p className="text-sm text-gray-600">{resource.description}</p>
+                                  )}
+                                </div>
+                                
+                                <div>
+                                  {/* Resource access based on premium status */}
+                                  {resource.premium && userAccessLevel !== 'advanced' ? (
+                                    <div className="flex items-center text-yellow-500 bg-yellow-50 px-3 py-1 rounded">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                      </svg>
+                                      <span className="text-sm">Premium</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {resource.url && (
+                                        <a 
+                                          href={resource.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-primary-600 hover:text-primary-800 bg-primary-50 hover:bg-primary-100 px-3 py-1 rounded inline-block"
+                                        >
+                                          Access
+                                        </a>
+                                      )}
+                                      {resource.file && (
+                                        <a 
+                                          href={resource.file} 
+                                          download
+                                          className="text-primary-600 hover:text-primary-800 bg-primary-50 hover:bg-primary-100 px-3 py-1 rounded inline-block"
+                                        >
+                                          Download
+                                        </a>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                            <p className="text-gray-500">No resources available for this lesson.</p>
+                          </div>
+                        )}
+                        
+                        {/* Premium resources section */}
+                        {lesson.premium_resources && lesson.premium_resources.length > 0 && (
+                          <div className="mt-8">
+                            <h3 className="text-lg font-bold mb-4 flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+                                className="w-5 h-5 text-yellow-500 mr-2">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                              Premium Resources
+                            </h3>
+                            
+                            <ContentAccessController
+                              requiredLevel="advanced"
+                              isLoggedIn={isAuthenticated}
+                              userAccessLevel={userAccessLevel}
+                              basicContent={
+                                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 rounded-lg p-6">
+                                  <div className="flex items-start">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                      </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                      <h3 className="font-medium text-amber-800">Premium Content</h3>
+                                      <p className="text-amber-700 mt-1">Upgrade to access {lesson.premium_resources.length} premium resources including downloadable files, code samples, and more.</p>
+                                      <div className="mt-4">
+                                        <Button
+                                          color="warning"
+                                          onClick={() => navigate('/pricing')}
+                                        >
+                                          Upgrade Now
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              }
+                            >
+                              <div className="space-y-4">
+                                {lesson.premium_resources.map(resource => (
+                                  <Card key={resource.id} className="flex items-center p-4 border-amber-200 bg-gradient-to-r from-yellow-50 to-amber-50">
+                                    <div className="flex-shrink-0 mr-4 bg-amber-100 w-12 h-12 rounded-lg flex items-center justify-center">
+                                      {resource.type === 'document' && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                      {resource.type === 'video' && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                      {resource.type === 'link' && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                      )}
+                                      {resource.type === 'code' && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                        </svg>
+                                      )}
+                                      {resource.type === 'tool' && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex-grow">
+                                      <div className="flex items-center">
+                                        <h3 className="font-medium">{resource.title}</h3>
+                                        <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-medium">Premium</span>
+                                      </div>
+                                      {resource.description && (
+                                        <p className="text-sm text-gray-600">{resource.description}</p>
+                                      )}
+                                    </div>
+                                    
+                                    <div>
+                                      {resource.url && (
+                                        <a 
+                                          href={resource.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded inline-block"
+                                        >
+                                          Access
+                                        </a>
+                                      )}
+                                      {resource.file && (
+                                        <a 
+                                          href={resource.file} 
+                                          download
+                                          className="text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded inline-block"
+                                        >
+                                          Download
+                                        </a>
+                                      )}
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            </ContentAccessController>
+                          </div>
+                        )}
+                      </ContentAccessController>
+                    </div>
+                  )}
+                  
+                  {/* Assessment Tab */}
+                  {activeTab === TABS.ASSESSMENT && (
+                    <div>
+                      <h2 className="text-xl font-bold mb-4">Lesson Assessment</h2>
+                      
+                      {/* Only show assessment to authenticated users with proper access */}
+                      <ContentAccessController
+                        requiredLevel={lesson.access_level}
+                        isLoggedIn={isAuthenticated}
+                        userAccessLevel={userAccessLevel}
+                        basicContent={
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                            <h3 className="font-bold mb-2">Access Required</h3>
+                            <p className="mb-4">Sign in or upgrade your subscription to access the assessment for this lesson.</p>
+                            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                              <Button
+                                color="primary"
+                                onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
+                              >
+                                Sign In
+                              </Button>
+                              <Button
+                                color="secondary"
+                                onClick={() => navigate('/register')}
+                              >
+                                Register
+                              </Button>
+                            </div>
+                          </div>
+                        }
+                      >
+                        {lesson.has_assessment ? (
+                          <div className="space-y-6">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                              <div className="flex items-start">
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                                <div className="ml-3">
+                                  <h3 className="font-medium text-blue-800">
+                                    {lesson.assessment?.title || 'Lesson Assessment'}
+                                  </h3>
+                                  <p className="text-blue-700 mt-1">
+                                    {lesson.assessment?.description || 'Test your knowledge of the concepts covered in this lesson.'}
+                                  </p>
+                                  <div className="mt-4 space-y-2">
+                                    {lesson.assessment?.time_limit > 0 && (
+                                      <div className="flex items-center text-sm text-blue-700">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                        </svg>
+                                        Time Limit: {lesson.assessment.time_limit} minutes
+                                      </div>
+                                    )}
+                                    <div className="flex items-center text-sm text-blue-700">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                      </svg>
+                                      Passing Score: {lesson.assessment?.passing_score || 70}%
+                                    </div>
+                                    <div className="flex items-center text-sm text-blue-700">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                      </svg>
+                                      Questions: {lesson.assessment?.questions?.length || 0}
+                                    </div>
+                                  </div>
+                                  <div className="mt-6">
+                                    {/* For simplicity, link to the assessment page */}
+                                    <Button
+                                      color="primary"
+                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${lesson.assessment?.id}`)}
+                                    >
+                                      Start Assessment
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                            <p className="text-gray-500">No assessment available for this lesson.</p>
+                          </div>
+                        )}
+                      </ContentAccessController>
+                    </div>
+                  )}
+                  
+                  {/* Notes Tab */}
+                  {activeTab === TABS.NOTES && (
+                    <div>
+                      <h2 className="text-xl font-bold mb-4">Your Notes</h2>
+                      
+                      {/* Only show notes to authenticated users */}
+                      {!isAuthenticated ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                          <h3 className="font-bold mb-2">Sign In to Take Notes</h3>
+                          <p className="mb-4">Notes are available for registered users. Sign in to save your notes for this lesson.</p>
+                          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                            <Button
+                              color="primary"
+                              onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
+                            >
+                              Sign In
+                            </Button>
+                            <Button
+                              color="secondary"
+                              onClick={() => navigate('/register')}
+                            >
+                              Register
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <textarea
+                              className="w-full h-48 p-4 border border-gray-300 rounded-lg
+                                                            focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              value={userNote}
+                              onChange={(e) => setUserNote(e.target.value)}
+                              placeholder="Take notes on this lesson..."
+                              ref={noteInputRef}
+                            ></textarea>
+                            <div className="flex justify-end mt-2">
+                              <Button
+                                color="primary"
+                                onClick={handleSaveNote}
+                                disabled={noteSaving || !userNote.trim()}
+                              >
+                                {noteSaving ? (
+                                  <><Spinner color="white" size="small" /> Saving...</>
+                                ) : (
+                                  <>Save Note</>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Previous notes */}
+                          <div>
+                            <h3 className="text-lg font-medium mb-3">Previous Notes</h3>
+                            {savedNotes.length > 1 ? (
+                              <div className="space-y-4">
+                                {savedNotes.slice(1).map((note) => (
+                                  <Card key={note.id} className="p-4">
+                                    <div className="flex justify-between items-start">
+                                      <div className="prose prose-sm max-w-none">
+                                        <p>{note.content}</p>
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        {new Date(note.updated_date || note.created_date).toLocaleDateString()}
+                                      </div>
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                                <p>No previous notes for this lesson</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-                
-                {/* Navigation Buttons */}
-                <div className="flex justify-between mt-6">
-                  <Button
-                    color="light"
-                    disabled={!prevLink}
-                    onClick={() => prevLink && navigateToLesson(prevLink.moduleId, prevLink.lessonId)}
-                    iconLeft={
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    }
-                  >
-                    Previous Lesson
-                  </Button>
-                  <Button
-                    color="primary"
-                    disabled={!nextLink}
-                    onClick={() => nextLink && navigateToLesson(nextLink.moduleId, nextLink.lessonId)}
-                    iconRight={
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                      </svg>
-                    }
-                  >
-                    {nextLink ? 'Next Lesson' : 'Complete Module'}
-                  </Button>
-                </div>
               </div>
-            ) : (
-              <div className="text-center py-10">
-                <div className="mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-semibold text-gray-700 mb-2">Lesson Not Found</h2>
-                <p className="text-gray-500 mb-4">The lesson you are looking for doesn't exist or has been moved.</p>
-                <Button 
-                  color="primary" 
-                  onClick={() => navigate(`/courses/${courseSlug}`)}
-                >
-                  Back to Course
-                </Button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

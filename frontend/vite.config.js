@@ -8,17 +8,21 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 5173, // Match the port specified in CORS settings
+    open: true, // Open browser on start
     proxy: {
       // Forward any request starting with /api to the Django backend
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
       },
       // Forward any request starting with /media to the Django backend
       '/media': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
+        secure: false
       }
     }
   }

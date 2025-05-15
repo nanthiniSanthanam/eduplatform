@@ -80,13 +80,14 @@ const RegisterPage = () => {
       setRegistrationError(null);
       
       try {
-        // Transform form values to match backend field names
+        // Use camelCase values with our API service's automatic transformer
         const userData = {
-          first_name: values.firstName,
-          last_name: values.lastName,
+          firstName: values.firstName,
+          lastName: values.lastName,
           username: values.username,
           email: values.email,
           password: values.password,
+          confirmPassword: values.confirmPassword,
           role: values.role,
         };
         

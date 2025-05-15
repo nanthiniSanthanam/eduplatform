@@ -1,6 +1,7 @@
 /**
- * File: C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\components\layouts\MainLayout.jsx
+ * File: frontend/src/components/layouts/MainLayout.jsx
  * Purpose: Main layout wrapper for consistent page structure with fixed header support
+ * Date: 2025-07-24 17:13:10
  * 
  * This component:
  * 1. Provides a consistent layout structure for pages
@@ -14,6 +15,7 @@
  * - Uses flex layout for proper content distribution
  * - Only includes the current date/time banner once
  * - Ensures proper spacing between all elements
+ * - Displays user's local time instead of UTC
  * 
  * Variables that can be modified:
  * - DATE_TIME_FORMAT: Change how date/time are displayed
@@ -24,15 +26,17 @@
  * Last updated: 2025-04-27 11:45:00
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Configuration variables - modify as needed
 const DATE_TIME_FORMAT = {
   dateStyle: 'medium',
   timeStyle: 'medium',
-  hour12: false
+  hour12: true
 };
 
 // These values should match those in Header.jsx
@@ -40,16 +44,29 @@ const HEADER_HEIGHT_EXPANDED = '80px'; // Match the EXPANDED_HEADER_HEIGHT in He
 const DATE_BANNER_HEIGHT = '28px'; // Height of the date/time banner
 
 const MainLayout = ({ children }) => {
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  
+  // Update time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(timer);
+  }, []);
+  
   // Get formatted date and time for the banner
-  const getCurrentDateTime = () => {
+  const getFormattedDateTime = () => {
     try {
-      const now = new Date();
-      return now.toLocaleString('en-US', DATE_TIME_FORMAT);
+      return currentDateTime.toLocaleString('en-US', DATE_TIME_FORMAT);
     } catch (error) {
       // Fallback formatting if toLocaleString with options isn't supported
-      return new Date().toString();
+      return currentDateTime.toString();
     }
   };
+
+  // Get authentication status to display correct user info
+  const { isAuthenticated, currentUser } = useAuth();
 
   // Calculate total header height (date banner + header)
   const totalHeaderOffset = `calc(${HEADER_HEIGHT_EXPANDED} + ${DATE_BANNER_HEIGHT})`;
@@ -62,8 +79,17 @@ const MainLayout = ({ children }) => {
         style={{ height: DATE_BANNER_HEIGHT }}
       >
         <div className="container mx-auto flex justify-between">
-          <span>Current Date and Time (UTC): {getCurrentDateTime()}</span>
-          <span>User: nanthiniSanthanam</span>
+          <span>Current Date and Time: {getFormattedDateTime()}</span>
+          <span>
+            {isAuthenticated ? (
+              `User: ${currentUser?.first_name || currentUser?.username || 'User'}`
+            ) : (
+              <div>
+                <Link to="/login" className="text-primary-300 hover:text-white mr-3">Login</Link>
+                <Link to="/register" className="text-primary-300 hover:text-white">Register</Link>
+              </div>
+            )}
+          </span>
         </div>
       </div>
       

@@ -7,21 +7,25 @@
  * 2. Displays user learning statistics
  * 3. Provides recommended courses based on interests
  * 4. Allows quick access to continue learning
+ * 5. Adds custom ResumeButton component for course navigation
  * 
  * Implementation notes:
  * - Fetches data from API endpoints dynamically
  * - Shows loading states during data fetch
  * - Handles errors gracefully with retry options
  * - Uses CourseCard component for consistent display
+ * - Integrates ResumeButton for improved course resumption
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { courseService, progressService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { ResumeButton, Button } from '../../components/common';
 
 const StudentDashboard = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [progressStats, setProgressStats] = useState(null);
@@ -35,28 +39,56 @@ const StudentDashboard = () => {
         setError(null);
         
         // Get enrolled courses
-        const enrollmentsResponse = await progressService.getUserEnrollments();
-        setEnrolledCourses(enrollmentsResponse.data || []);
+        try {
+          const enrollmentsResponse = await progressService.getUserEnrollments();
+          setEnrolledCourses(enrollmentsResponse || []);
+        } catch (enrollError) {
+          console.error('Error fetching enrollments:', enrollError);
+          setEnrolledCourses([]);
+        }
         
-        // Get progress statistics
-        const statsResponse = await progressService.getUserProgressStats();
-        setProgressStats(statsResponse.data || {
-          completed_courses: 0,
-          total_enrollments: 0,
-          total_hours_spent: 0,
-          assessments_completed: 0
-        });
+        // Get progress statistics - with fallback handling
+        try {
+          const statsResponse = await progressService.getUserProgressStats();
+          setProgressStats(statsResponse || {
+            totalCourses: 0,
+            coursesInProgress: 0,
+            coursesCompleted: 0,
+            totalLessons: 0,
+            completedLessons: 0,
+            completionPercentage: 0,
+            hoursSpent: 0,
+            recentActivity: []
+          });
+        } catch (statsError) {
+          console.error('Error fetching progress stats:', statsError);
+          setProgressStats({
+            totalCourses: 0,
+            coursesInProgress: 0,
+            coursesCompleted: 0,
+            totalLessons: 0,
+            completedLessons: 0,
+            completionPercentage: 0,
+            hoursSpent: 0,
+            recentActivity: []
+          });
+        }
         
         // Get recommended courses
-        const recommendationsResponse = await courseService.getAllCourses({ 
-          recommended: true, 
-          limit: 3 
-        });
-        setRecommendations(recommendationsResponse.data || []);
+        try {
+          const recommendationsResponse = await courseService.getAllCourses({ 
+            recommended: true, 
+            limit: 3 
+          });
+          setRecommendations(recommendationsResponse || []);
+        } catch (recError) {
+          console.error('Error fetching recommendations:', recError);
+          setRecommendations([]);
+        }
         
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
-        setError('Failed to load dashboard data. Please try again later.');
+        setError('Failed to load some dashboard data. Please refresh to try again.');
       } finally {
         setLoading(false);
       }
@@ -157,7 +189,25 @@ const StudentDashboard = () => {
                     ></div>
                   </div>
                   
+                  {/* Course action buttons with new ResumeButton */}
                   <div className="mt-4">
+                    <div className="mb-4">
+                      {enrollment.course && (
+                        <ResumeButton 
+                          courseSlug={enrollment.course.slug} 
+                          size="small" 
+                          className="mr-2"
+                        />
+                      )}
+                      <Button
+                        variant="outline"
+                        size="small"
+                        onClick={() => navigate(`/courses/${enrollment.course.slug}`)}
+                      >
+                        Course Details
+                      </Button>
+                    </div>
+                    
                     <Link 
                       to={`/courses/${enrollment.course.slug}/content/${enrollment.current_module_id || 1}/${enrollment.current_lesson_id || 1}`} 
                       className="block w-full bg-primary-600 text-center text-white py-2 rounded hover:bg-primary-700"

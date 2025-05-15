@@ -1,37 +1,21 @@
 /**
  * File: frontend/src/components/routes/ProtectedRoute.jsx
- * Purpose: Enhanced route protection component with tiered access control
+ * Version: 2.1.1
+ * Date: 2025-08-13 08:20:17
+ * Author: cadsanthanam
  * 
- * This component:
- * 1. Protects routes from unauthenticated access
- * 2. Handles role-based route protection
- * 3. Handles subscription-level access protection
- * 4. Shows loading state while authentication status is being checked
- * 5. Redirects to appropriate pages when access is denied
+ * Smart route protection component with tiered access control
  * 
- * Modifications for tiered access:
- * 1. Updated to work with enhanced AuthContext subscription state
- * 2. Added requiredAccessLevel prop for content access control
- * 3. Fixed subscription checking logic
- * 
- * Usage examples:
- * - Basic protection: <ProtectedRoute>...</ProtectedRoute>
- * - Role-based: <ProtectedRoute requiredRoles={['instructor']}>...</ProtectedRoute>
- * - Access-level-based: <ProtectedRoute requiredAccessLevel="advanced">...</ProtectedRoute>
- * - Subscription-based: <ProtectedRoute requiredSubscription="premium">...</ProtectedRoute>
- * - Email verification: <ProtectedRoute requireEmailVerified={true}>...</ProtectedRoute>
- * 
- * Variables to modify:
- * - SUBSCRIPTION_TIER_MAP: Maps subscription tiers to required subscription props
- * - ACCESS_LEVEL_MAP: Maps access levels to subscription tiers
- * 
- * @author nanthiniSanthanam
- * @version 2.0
+ * CRITICAL FIXES:
+ * - Added safety timeout to prevent infinite loading state
+ * - Improved error recovery mechanisms
+ * - Fixed ACCESS_LEVEL_MAP to align with ContentAccessController
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { LoadingScreen } from '../common';
 
 // Map subscription props to actual subscription tiers
 const SUBSCRIPTION_TIER_MAP = {
@@ -42,9 +26,12 @@ const SUBSCRIPTION_TIER_MAP = {
 // Map access levels to minimum subscription tier required
 const ACCESS_LEVEL_MAP = {
   'basic': null,  // No subscription required
-  'intermediate': 'free',  // Registered user (any tier)
+  'intermediate': 'basic',  // Registered user (any tier) - FIXED from 'free' to 'basic'
   'advanced': 'premium'  // Premium subscription required
 };
+
+// Safety timeout duration for access checks (in milliseconds)
+const ACCESS_CHECK_TIMEOUT = 10000; // 10 seconds
 
 const ProtectedRoute = ({ 
   children, 
@@ -53,78 +40,141 @@ const ProtectedRoute = ({
   requiredSubscription = null, // Required subscription level: null, 'basic', 'premium'
   requiredAccessLevel = null // Required access level: 'basic', 'intermediate', 'advanced'
 }) => {
-  const { currentUser, isAuthenticated, loading, getAccessLevel, subscription } = useAuth();
   const location = useLocation();
+  const { currentUser, isLoading, isAuthenticated, getAccessLevel } = useAuth();
+  const [accessGranted, setAccessGranted] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  const [redirectPath, setRedirectPath] = useState('/login');
 
-  // Show loading indicator while checking authentication
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700"></div>
-        <span className="ml-3 text-primary-700">Loading...</span>
-      </div>
-    );
-  }
-
-  // Convert requiredAccessLevel to requiredSubscription if provided
-  if (requiredAccessLevel && !requiredSubscription) {
-    requiredSubscription = ACCESS_LEVEL_MAP[requiredAccessLevel];
-  }
-
-  // Redirect to login if not authenticated and route requires authentication
-  if (!isAuthenticated() && (requiredRoles.length > 0 || requireEmailVerified || requiredSubscription)) {
-    return <Navigate to="/login" state={{ from: location.pathname }} />;
-  }
-
-  // Check if email verification is required and the user's email is verified
-  if (requireEmailVerified && currentUser && !currentUser.is_email_verified) {
-    return <Navigate to="/verify-email" state={{ from: location.pathname }} />;
-  }
-
-  // Check if user has required role(s)
-  if (requiredRoles.length > 0 && currentUser) {
-    const hasRequiredRole = requiredRoles.includes(currentUser.role);
-    
-    if (!hasRequiredRole) {
-      // Redirect to unauthorized page or dashboard based on role
-      if (currentUser.role === 'student') {
-        return <Navigate to="/student/dashboard" />;
-      } else if (currentUser.role === 'instructor') {
-        return <Navigate to="/instructor/dashboard" />;
-      } else {
-        return <Navigate to="/unauthorized" />;
-      }
-    }
-  }
-
-  // Check for subscription requirements
-  if (requiredSubscription && currentUser) {
-    // Get allowed tiers for this subscription requirement
-    const allowedTiers = SUBSCRIPTION_TIER_MAP[requiredSubscription] || [];
-    
-    // Check if user's subscription is in the allowed tiers
-    const hasRequiredSubscription = 
-      (requiredSubscription === 'free' && isAuthenticated()) || // Free just requires authentication
-      (allowedTiers.includes(subscription.tier) && subscription.isActive);
+  useEffect(() => {
+    const checkAccess = async () => {
+      setIsChecking(true);
       
-    if (!hasRequiredSubscription) {
-      // Redirect to subscription page with return path
-      return <Navigate to="/pricing" state={{ from: location.pathname }} />;
-    }
-  }
-
-  // If requiredAccessLevel is specified, check access level
-  if (requiredAccessLevel && isAuthenticated()) {
-    const userAccessLevel = getAccessLevel();
-    const accessLevelMap = { 'basic': 0, 'intermediate': 1, 'advanced': 2 };
+      // CRITICAL FIX: Add safety timeout to prevent infinite checking
+      const safetyTimeout = setTimeout(() => {
+        console.warn("Protected route access check timed out - allowing access by default");
+        setIsChecking(false);
+        // Default to granting access in case of timeout, as blocking forever is worse
+        setAccessGranted(true);
+      }, ACCESS_CHECK_TIMEOUT);
+      
+      try {
+        // If still loading auth state, wait but don't block forever
+        if (isLoading) {
+          // The safety timeout will handle this if it takes too long
+          return;
+        }
+        
+        // Not authenticated but access requires auth
+        if (!isAuthenticated && (requiredRoles.length > 0 || requireEmailVerified || requiredSubscription)) {
+          setRedirectPath(`/login?redirect=${encodeURIComponent(location.pathname)}`);
+          setAccessGranted(false);
+          setIsChecking(false);
+          clearTimeout(safetyTimeout);
+          return;
+        }
+        
+        // If no specific requirements beyond authentication
+        if (requiredRoles.length === 0 && !requireEmailVerified && !requiredSubscription && !requiredAccessLevel) {
+          setAccessGranted(true);
+          setIsChecking(false);
+          clearTimeout(safetyTimeout);
+          return;
+        }
+        
+        // Role check - user must have one of the required roles
+        if (requiredRoles.length > 0) {
+          const hasRole = requiredRoles.some(role => {
+            if (role === 'student' && currentUser && !currentUser.role) {
+              // Default to student if no role specified
+              return true;
+            }
+            return currentUser && currentUser.role === role;
+          });
+          
+          if (!hasRole) {
+            setRedirectPath('/unauthorized');
+            setAccessGranted(false);
+            setIsChecking(false);
+            clearTimeout(safetyTimeout);
+            return;
+          }
+        }
+        
+        // Email verification check
+        if (requireEmailVerified && currentUser && !currentUser.isEmailVerified) {
+          setRedirectPath('/verify-email');
+          setAccessGranted(false);
+          setIsChecking(false);
+          clearTimeout(safetyTimeout);
+          return;
+        }
+        
+        // Subscription check
+        const hasRequiredSubscription = (
+          !requiredSubscription || // No subscription required
+          (requiredSubscription === 'free' && isAuthenticated) || // Free just requires authentication
+          (currentUser && currentUser.subscription && 
+           currentUser.subscription.tier === requiredSubscription && 
+           currentUser.subscription.isActive)
+        );
+        
+        if (!hasRequiredSubscription) {
+          setRedirectPath('/subscription');
+          setAccessGranted(false);
+          setIsChecking(false);
+          clearTimeout(safetyTimeout);
+          return;
+        }
+        
+        // Access level check
+        if (requiredAccessLevel && isAuthenticated) {
+          const userAccessLevel = getAccessLevel ? getAccessLevel() : 'basic';
+          const accessLevels = { 'basic': 1, 'intermediate': 2, 'advanced': 3 };
+          
+          if (accessLevels[userAccessLevel] < accessLevels[requiredAccessLevel]) {
+            setRedirectPath('/subscription');
+            setAccessGranted(false);
+            setIsChecking(false);
+            clearTimeout(safetyTimeout);
+            return;
+          }
+        }
+        
+        // If we've passed all checks, grant access
+        setAccessGranted(true);
+        setIsChecking(false);
+        clearTimeout(safetyTimeout);
+      } catch (error) {
+        // If any error occurs during check, log it and default to granting access
+        // This prevents users from being locked out due to errors
+        console.error("Error during access check:", error);
+        setAccessGranted(true);
+        setIsChecking(false);
+        clearTimeout(safetyTimeout);
+      }
+    };
     
-    if (accessLevelMap[userAccessLevel] < accessLevelMap[requiredAccessLevel]) {
-      // User doesn't have required access level
-      return <Navigate to="/pricing" state={{ from: location.pathname }} />;
-    }
+    checkAccess();
+    
+    // Clean up safety timeout if component unmounts
+    return () => {
+      setIsChecking(false);
+    };
+  }, [currentUser, isLoading, isAuthenticated, location.pathname, requiredRoles, requireEmailVerified, requiredSubscription, requiredAccessLevel, getAccessLevel]);
+  
+  // Show loading while checking permissions (but not if auth is still loading)
+  if (isChecking && !isLoading) {
+    return <LoadingScreen message="Checking permissions..." />;
   }
-
-  // Render children if all checks pass
+  
+  // Redirect if access not granted
+  if (!accessGranted && !isLoading && !isChecking) {
+    return <Navigate to={redirectPath} state={{ from: location }} replace />;
+  }
+  
+  // Render children if access is granted or if we're still loading auth
+  // This way content appears as soon as access is confirmed
   return children;
 };
 

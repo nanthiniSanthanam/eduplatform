@@ -1,8 +1,8 @@
 /**
  * File: frontend/src/pages/auth/VerifyEmailPage.jsx
  * Purpose: Handles email verification process and resend functionality
- * Last Updated: 2025-04-29 16:41:25
- * Updated By: cadsanthanam
+ * Last Updated: 2025-05-20 10:15:12
+ * Updated By: agentic-ai
  * 
  * Key features:
  * 1. Verifies email tokens automatically from URL query parameters
@@ -22,19 +22,22 @@
  * - Connects with authService (verifyEmail, resendVerification) for API communication
  * - Handles various verification states with proper UI feedback
  * - Special handling for "already verified" error as a success state
+ * - Uses refs to prevent duplicate API calls, especially in React's StrictMode
  * 
  * Variables to modify if needed:
  * - redirectPath: Where to send the user after successful verification (default: '/login')
  * - redirectDelay: How many seconds to wait before auto-redirect (default: 5)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const VerifyEmailPage = () => {
+  // Parse the token from URL only once during initialization
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  
   const { verifyEmail, resendVerification, currentUser } = useAuth();
   const navigate = useNavigate();
   
@@ -42,11 +45,15 @@ const VerifyEmailPage = () => {
   const redirectPath = '/login';
   const redirectDelay = 5; // seconds before auto-redirect
   
+  // Use refs to track verification attempt and prevent duplicates
+  const verificationAttemptedRef = useRef(false);
+  const resendAttemptInProgressRef = useRef(false);
+  
+  // Component state
   const [verificationState, setVerificationState] = useState({
     status: token ? 'verifying' : 'manual',
-    message: token ? 'Verifying your email...' : 'Please verify your email'
+    message: token ? 'Verifying your email...' : 'Please enter your email to verify your account'
   });
-
   const [email, setEmail] = useState('');
   const [countdown, setCountdown] = useState(redirectDelay);
   const [emailError, setEmailError] = useState('');
@@ -74,50 +81,65 @@ const VerifyEmailPage = () => {
     };
   }, [countdown, verificationState.status, navigate, redirectPath]);
 
-  const verifyToken = useCallback(async () => {
-    if (token) {
-      try {
-        setVerificationState({
-          status: 'verifying',
-          message: 'Verifying your email...'
-        });
-        
-        const result = await verifyEmail(token);
-        if (result.success) {
-          setVerificationState({
-            status: 'success',
-            message: 'Your email has been successfully verified!'
-          });
-        } else {
-          setVerificationState({
-            status: 'error',
-            message: result.error || 'Failed to verify email. The token may be invalid or expired.'
-          });
-        }
-      } catch (error) {
-        // Check for network errors
-        if (!navigator.onLine) {
-          setVerificationState({
-            status: 'error',
-            message: 'No internet connection. Please check your connection and try again.'
-          });
-        } else {
-          // Parse server error message if available
-          const serverMessage = error.response?.data?.detail || error.message || 'An error occurred during verification.';
-          setVerificationState({
-            status: 'error',
-            message: serverMessage
-          });
-        }
-      }
-    }
-  }, [token, verifyEmail]);
-  
+  // Handle token verification once on component mount using ref
   useEffect(() => {
-    if (token) {
+    // To debug duplicate calls: 
+    // console.log("Effect running: token =", token, 
+    //             "attempted =", verificationAttemptedRef.current, 
+    //             "status =", verificationState.status);
+    
+    // Only verify if:
+    // 1. There's a token
+    // 2. We haven't attempted verification yet
+    // 3. The state is still in verifying mode
+    if (token && !verificationAttemptedRef.current && verificationState.status === 'verifying') {
+      // Set the ref FIRST to prevent any future attempts, even if this one errors out
+      verificationAttemptedRef.current = true;
+      
+      const verifyToken = async () => {
+        try {
+          // Debug log
+          console.log('Attempting verification once only with token:', token);
+          
+          // Call the verifyEmail function
+          const result = await verifyEmail(token);
+          
+          if (result.success) {
+            setVerificationState({
+              status: 'success',
+              message: result.message || 'Your email has been successfully verified! You can now log in.'
+            });
+          } else {
+            setVerificationState({
+              status: 'error',
+              message: result.error || 'Failed to verify email. The token may be invalid or expired.'
+            });
+          }
+        } catch (error) {
+          // This should not happen due to proper error handling in verifyEmail,
+          // but we'll handle it just in case
+          console.error('Uncaught verification error:', error);
+          
+          // Check for network errors
+          if (!navigator.onLine) {
+            setVerificationState({
+              status: 'error',
+              message: 'No internet connection. Please check your connection and try again.'
+            });
+          } else {
+            // Generic error
+            setVerificationState({
+              status: 'error',
+              message: error.message || 'An unexpected error occurred during verification.'
+            });
+          }
+        }
+      };
+      
+      // Start the verification process
       verifyToken();
     }
-  }, [token, verifyToken]);
+  }, [token, verifyEmail, verificationState.status]); // Dependencies limited to what is used
 
   // Email validation function
   const validateEmail = (email) => {
@@ -126,9 +148,16 @@ const VerifyEmailPage = () => {
   };
 
   const handleResendVerification = async () => {
+    // Prevent duplicate requests
+    if (resendAttemptInProgressRef.current || verificationState.status === 'sending') {
+      console.log('Resend already in progress, ignoring duplicate request');
+      return;
+    }
+    
     // Clear previous errors
     setEmailError('');
     
+    // Validate email
     if (!email) {
       setEmailError('Please enter your email address');
       return;
@@ -139,27 +168,40 @@ const VerifyEmailPage = () => {
       return;
     }
 
+    // Set flags to prevent duplicate requests
+    resendAttemptInProgressRef.current = true;
+    
     try {
+      // Update UI state
       setVerificationState({
         status: 'sending',
         message: 'Sending verification email...'
       });
 
-      await resendVerification(email);
-
-      setVerificationState({
-        status: 'sent',
-        message: 'A new verification email has been sent. Please check your inbox.'
-      });
-    } catch (error) {
-      // Handle "already verified" as a success case
-      if (error.response?.data?.detail === "Email address is already verified.") {
+      console.log('Resending verification to:', email);
+      const result = await resendVerification(email);
+      
+      // Reset flag now that request is complete
+      resendAttemptInProgressRef.current = false;
+      
+      if (result.success) {
         setVerificationState({
-          status: 'success',
-          message: 'This email is already verified! You can proceed to login.'
+          status: 'sent',
+          message: result.message || 'A new verification email has been sent. Please check your inbox and spam folder.'
         });
-        return;
+      } else {
+        // Handle errors from the resend verification function
+        setVerificationState({
+          status: 'error',
+          message: result.error || 'Failed to resend verification email. Please try again.'
+        });
       }
+    } catch (error) {
+      // Reset flag on error
+      resendAttemptInProgressRef.current = false;
+      
+      // Log the error for debugging
+      console.error('Resend verification unexpected error:', error);
       
       // Handle network errors
       if (!navigator.onLine) {
@@ -168,16 +210,16 @@ const VerifyEmailPage = () => {
           message: 'No internet connection. Please check your connection and try again.'
         });
       } else {
-        // Parse server error message if available
-        const serverMessage = error.response?.data?.detail || error.message || 'Failed to resend verification email';
+        // Use our standardized error format
         setVerificationState({
           status: 'error',
-          message: serverMessage
+          message: error.message || 'Failed to resend verification email'
         });
       }
     }
   };
 
+  // Render email form for manual verification or resending
   const renderEmailForm = () => (
     <div className="mt-1">
       <input
@@ -195,9 +237,12 @@ const VerifyEmailPage = () => {
       {emailError && <p className="text-red-500 text-xs mb-2">{emailError}</p>}
       <button
         onClick={handleResendVerification}
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        disabled={verificationState.status === 'sending'}
+        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
       >
-        Resend Verification Email
+        {verificationState.status === 'sending' 
+          ? 'Sending...' 
+          : (verificationState.status === 'sent' ? 'Resend Again' : 'Send Verification Email')}
       </button>
     </div>
   );
@@ -251,23 +296,14 @@ const VerifyEmailPage = () => {
 
           {verificationState.status === 'manual' && (
             <div className="text-center">
-              <svg className="mx-auto h-12 w-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <p className="mt-4 text-lg text-gray-800">Please verify your email address</p>
-              <p className="mt-2 text-sm text-gray-600">
-                We've sent you a verification email. Click the link in the email to verify your account.
-              </p>
-              <div className="mt-6">
-                <p className="mb-4 text-sm text-gray-600">Didn't receive an email?</p>
-                {renderEmailForm()}
-              </div>
+              <p className="mb-4 text-gray-700">{verificationState.message}</p>
+              {renderEmailForm()}
             </div>
           )}
 
           {verificationState.status === 'sending' && (
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700 mx-auto"></div>
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700"></div>
               <p className="mt-4 text-gray-600">{verificationState.message}</p>
             </div>
           )}
@@ -275,13 +311,19 @@ const VerifyEmailPage = () => {
           {verificationState.status === 'sent' && (
             <div className="text-center">
               <svg className="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
               <p className="mt-4 text-lg text-gray-800">{verificationState.message}</p>
               <div className="mt-6">
-                <Link to={redirectPath} className="text-primary-600 hover:text-primary-500">
-                  Return to login
-                </Link>
+                <p className="mb-4 text-sm text-gray-600">
+                  Didn't receive the email? Check your spam folder or try again.
+                </p>
+                {renderEmailForm()}
+                <div className="mt-4">
+                  <Link to="/login" className="text-sm text-primary-600 hover:text-primary-500">
+                    Return to login
+                  </Link>
+                </div>
               </div>
             </div>
           )}

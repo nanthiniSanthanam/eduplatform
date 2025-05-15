@@ -24,7 +24,7 @@
  * - EXPANDED_HEADER_HEIGHT: Height of the header when at top (default: 80px)
  * 
  * Created by: Professor Santhanam
- * Last updated: 2025-04-27 11:45:00
+ * Last updated: 2025-05-22 12:15:00
  */
 
 import React, { useState, useEffect } from 'react';
@@ -86,6 +86,15 @@ const Header = () => {
     // Clean up event listener on component unmount
     return () => window.removeEventListener('scroll', handleScroll);
   }, [scrolled]); // Only re-run if scrolled state changes
+  
+  // Handle logout with confirmation
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to sign out?')) {
+      logout();
+      setShowUserMenu(false);
+      navigate('/');
+    }
+  };
   
   return (
     <header 
@@ -167,8 +176,8 @@ const Header = () => {
               </button>
             </form>
             
-            {/* User Menu */}
-            {isAuthenticated() ? (
+            {/* User Menu or Login/Register Links */}
+            {isAuthenticated ? (
               <div className="relative">
                 <button 
                   className="flex items-center focus:outline-none"
@@ -182,7 +191,7 @@ const Header = () => {
                       transitionDuration: ANIMATION_DURATION
                     }}
                   >
-                    NA
+                    {currentUser?.first_name?.[0]?.toUpperCase() || currentUser?.username?.[0]?.toUpperCase() || 'U'}
                   </div>
                   <span 
                     className="text-gray-700 transition-all"
@@ -191,7 +200,7 @@ const Header = () => {
                       transitionDuration: ANIMATION_DURATION
                     }}
                   >
-                    nanthiniSanthanam
+                    {currentUser?.first_name || currentUser?.username || 'User'}
                   </span>
                   <svg 
                     xmlns="http://www.w3.org/2000/svg" 
@@ -211,11 +220,7 @@ const Header = () => {
                     <Link to="/user/courses" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Courses</Link>
                     <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</Link>
                     <button 
-                      onClick={() => {
-                        logout();
-                        setShowUserMenu(false);
-                        navigate('/');
-                      }}
+                      onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
                     >
                       Sign Out
