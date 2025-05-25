@@ -14,6 +14,10 @@ This file contains:
 - ProfileView: Retrieve and update user profile information
 - UserSessionView: View and manage active user sessions
 - SubscriptionViewSet: View and manage user subscription tiers and access levels
+- SocialAuthGoogleView: Initiate Google OAuth authentication with PKCE support
+- SocialAuthGithubView: Initiate GitHub OAuth authentication with PKCE support
+- SocialAuthCompleteView: Complete social authentication with PKCE and CSRF protection
+- SocialAuthErrorView: Handle social authentication errors
 
 Modification variables:
 - DEFAULT_SUBSCRIPTION_DAYS: Length of subscriptions in days (default: 30)
@@ -27,10 +31,12 @@ Connected files:
 3. backend/users/permissions.py - Custom permission classes
 4. frontend/src/contexts/AuthContext.jsx - Consumes these API endpoints
 
-Changes (2025-05-05):
-- Fixed RegisterView.create() to explicitly create an EmailVerification record 
-  instead of trying to retrieve a non-existent record
-- This resolves the 500 error during user registration
+Changes (2025-05-21 17:26:43 by cadsanthanam):
+- Enhanced social authentication with PKCE support for improved security
+- Added proper CSRF protection via state parameter validation
+- Added support for UserSession login_method tracking with fallback
+- Improved error handling and validation for OAuth flows
+- Enhanced verification of email addresses from social providers
 """
 
 from rest_framework import generics, status, views, viewsets, permissions
@@ -44,11 +50,13 @@ from django.utils.encoding import force_bytes
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from datetime import timedelta
 import uuid
 import socket
 import logging
+import json
+import requests  # Added for OAuth API requests
 
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserDetailSerializer,
@@ -212,19 +220,27 @@ class LoginView(views.APIView):
         else:
             expires_at = timezone.now() + timedelta(hours=24)
 
-        # ---- single, canonical session row using JTI ----
+        # Create session data dictionary with required fields
+        session_data = {
+            'user': user,
+            'session_key': refresh.access_token['jti'],
+            'ip_address': ip_address,
+            'user_agent': user_agent,
+            'expires_at': expires_at,
+            'device_type': self._get_device_type(user_agent),
+            'location': self._get_location_from_ip(ip_address)
+        }
+
+        # Only add login_method if the field exists in your model
+        try:
+            UserSession._meta.get_field('login_method')
+            session_data['login_method'] = 'credentials'
+        except Exception:
+            # Field doesn't exist, don't include it
+            pass
+
         # Create single user session with JTI (JSON Web Token ID)
-        # This is required for CustomJWTAuthentication to validate the token
-        UserSession.objects.create(
-            user=user,
-            # Store JTI (token ID), not the encoded token
-            session_key=refresh.access_token['jti'],
-            ip_address=ip_address,
-            user_agent=user_agent,
-            expires_at=expires_at,
-            device_type=self._get_device_type(user_agent),
-            location=self._get_location_from_ip(ip_address)
-        )
+        UserSession.objects.create(**session_data)
 
         # Ensure user has a subscription
         try:
@@ -841,3 +857,504 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(subscription)
         return Response(serializer.data)
+
+
+# Enhanced Social Authentication Views with PKCE support
+class SocialAuthGoogleView(views.APIView):
+    """
+    API view to initiate Google OAuth authentication with PKCE support.
+    Returns Google login URL for client-side redirect.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Get PKCE and state parameters from the request
+        code_challenge = request.GET.get('code_challenge')
+        code_challenge_method = request.GET.get(
+            'code_challenge_method', 'S256')
+        state = request.GET.get('state')
+
+        # Build Google OAuth URL with required parameters
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/social/google/callback"
+
+        # Start with the base authorization URL
+        auth_url = f"https://accounts.google.com/o/oauth2/auth?client_id={settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY}&redirect_uri={redirect_uri}&response_type=code&scope=email%20profile&access_type=offline&prompt=consent"
+
+        # Add PKCE parameters if provided for enhanced security
+        if code_challenge:
+            auth_url += f"&code_challenge={code_challenge}&code_challenge_method={code_challenge_method}"
+            logger.info(
+                f"Adding PKCE to Google OAuth flow with method: {code_challenge_method}")
+
+        # Add state parameter for CSRF protection if provided
+        if state:
+            auth_url += f"&state={state}"
+            logger.info(
+                "Adding state parameter to Google OAuth flow for CSRF protection")
+
+        # Return the authorization URL to the client
+        return Response({
+            'authorizationUrl': auth_url
+        })
+
+
+class SocialAuthGithubView(views.APIView):
+    """
+    API view to initiate GitHub OAuth authentication with PKCE support.
+    Returns GitHub login URL for client-side redirect.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Get PKCE and state parameters from the request
+        code_challenge = request.GET.get('code_challenge')
+        code_challenge_method = request.GET.get(
+            'code_challenge_method', 'S256')
+        state = request.GET.get('state')
+
+        # Build GitHub OAuth URL with required parameters
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/social/github/callback"
+
+        # Start with the base authorization URL
+        auth_url = f"https://github.com/login/oauth/authorize?client_id={settings.SOCIAL_AUTH_GITHUB_KEY}&redirect_uri={redirect_uri}&scope=user:email"
+
+        # Add PKCE parameters if provided for enhanced security
+        if code_challenge:
+            auth_url += f"&code_challenge={code_challenge}&code_challenge_method={code_challenge_method}"
+            logger.info(
+                f"Adding PKCE to GitHub OAuth flow with method: {code_challenge_method}")
+
+        # Add state parameter for CSRF protection if provided
+        if state:
+            auth_url += f"&state={state}"
+            logger.info(
+                "Adding state parameter to GitHub OAuth flow for CSRF protection")
+
+        # Return the authorization URL to the client
+        return Response({
+            'authorizationUrl': auth_url
+        })
+
+
+class SocialAuthCompleteView(views.APIView):
+    """
+    API view to handle social auth callback and generate JWT token.
+    This is called after social auth provider redirects back with code.
+    Supports PKCE for enhanced security.
+    """
+    permission_classes = [permissions.AllowAny]  # Allow unauthenticated access
+
+    def post(self, request):
+        """
+        Handle POST request with authorization code from OAuth provider.
+
+        Expected request format:
+        {
+            "code": "authorization_code_from_provider",
+            "provider": "google" or "github",
+            "code_verifier": "pkce_code_verifier" (optional),
+            "state": "csrf_state_token" (optional)
+        }
+        """
+        try:
+            code = request.data.get('code')
+            provider = request.data.get('provider')
+            code_verifier = request.data.get('code_verifier')
+            state = request.data.get('state')
+
+            # Log parameters for debugging
+            logger.info(
+                f"Received social auth request: provider={provider}, code_length={len(code) if code else 0}, has_verifier={bool(code_verifier)}, has_state={bool(state)}")
+
+            # Validate the required parameters
+            if not code:
+                return Response(
+                    {"detail": "Authorization code is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not provider or provider not in ['google', 'github']:
+                return Response(
+                    {"detail": "Valid provider (google or github) is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Special handling for development environment
+            is_dev = settings.DEBUG
+            if is_dev and code_verifier == 'dev-verifier':
+                logger.info("Using development code verifier bypass")
+                # In development, allow placeholder code verifier
+                code_verifier = None
+
+            # Store code in request session to prevent reuse
+            session_key = f"oauth_{provider}_code"
+            if hasattr(request, 'session'):
+                if request.session.get(session_key) == code:
+                    logger.warning(f"Attempt to reuse {provider} OAuth code")
+                    return Response(
+                        {"detail": "This authorization code has already been used."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                request.session[session_key] = code
+
+            # Exchange code for user info with provider
+            if provider == 'google':
+                # Process Google authentication with PKCE if provided
+                try:
+                    user_info = self._exchange_google_code(code, code_verifier)
+                except Exception as e:
+                    logger.error(f"Google token exchange error: {str(e)}")
+                    return Response(
+                        {"detail": f"Google authentication failed: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Validate email verification status (extra security for Google accounts)
+                if not user_info.get('email_verified', True):
+                    logger.warning(
+                        f"Google account email not verified: {user_info.get('email')}")
+                    return Response(
+                        {"detail": "Your Google account email is not verified. Please verify your email with Google."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Get or create user based on the email from provider
+                email = user_info.get('email')
+                if not email:
+                    return Response(
+                        {"detail": "Could not get email from Google."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Find or create user
+                try:
+                    user = User.objects.get(email=email)
+                    logger.info(
+                        f"Found existing user account for Google login: {email}")
+                except User.DoesNotExist:
+                    user = User.objects.create_user(
+                        email=email,
+                        username=email,
+                        first_name=user_info.get('given_name', ''),
+                        last_name=user_info.get('family_name', ''),
+                        is_active=True,
+                        is_email_verified=True  # Auto-verify OAuth users
+                    )
+                    # Create profile and subscription for new users
+                    try:
+                        Profile.objects.create(user=user)
+                    except Exception as e:
+                        logger.error(f"Error creating profile: {str(e)}")
+                    try:
+                        Subscription.create_for_user(user)
+                    except Exception as e:
+                        logger.error(f"Error creating subscription: {str(e)}")
+                    logger.info(f"Created new user from Google OAuth: {email}")
+
+            elif provider == 'github':
+                # Process GitHub authentication with PKCE if provided
+                try:
+                    user_info = self._exchange_github_code(code, code_verifier)
+                except Exception as e:
+                    logger.error(f"GitHub token exchange error: {str(e)}")
+                    return Response(
+                        {"detail": f"GitHub authentication failed: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Get or create user based on the email from provider
+                email = user_info.get('email')
+                if not email:
+                    return Response(
+                        {"detail": "Could not get email from GitHub."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Parse name into first and last name
+                full_name = user_info.get('name', '')
+                name_parts = full_name.split(' ', 1) if full_name else ['', '']
+                first_name = name_parts[0]
+                last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+                # Find or create user
+                try:
+                    user = User.objects.get(email=email)
+                    logger.info(
+                        f"Found existing user account for GitHub login: {email}")
+                except User.DoesNotExist:
+                    user = User.objects.create_user(
+                        email=email,
+                        username=email,
+                        first_name=first_name,
+                        last_name=last_name,
+                        is_active=True,
+                        is_email_verified=True  # Auto-verify OAuth users
+                    )
+                    # Create profile and subscription for new users
+                    try:
+                        Profile.objects.create(user=user)
+                    except Exception as e:
+                        logger.error(f"Error creating profile: {str(e)}")
+                    try:
+                        Subscription.create_for_user(user)
+                    except Exception as e:
+                        logger.error(f"Error creating subscription: {str(e)}")
+                    logger.info(f"Created new user from GitHub OAuth: {email}")
+
+            # Update last login timestamp
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+
+            # Create JWT tokens
+            refresh = RefreshToken.for_user(user)
+
+            # Create user session
+            ip_address = self._get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            # Default to longer session for social login
+            expires_at = timezone.now() + timedelta(days=14)
+
+            # Create session data dictionary with required fields
+            session_data = {
+                'user': user,
+                'session_key': refresh.access_token['jti'],
+                'ip_address': ip_address or '0.0.0.0',
+                'user_agent': user_agent or 'Unknown',
+                'expires_at': expires_at,
+                'device_type': self._get_device_type(user_agent),
+                'location': self._get_location_from_ip(ip_address)
+            }
+
+            # Check if login_method field exists in the model before adding it
+            try:
+                UserSession._meta.get_field('login_method')
+                session_data['login_method'] = f"social_{provider}"
+            except Exception:
+                # Field doesn't exist, don't include it
+                pass
+
+            # Create the session
+            UserSession.objects.create(**session_data)
+
+            # Return tokens as JSON response
+            data = {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserDetailSerializer(user, context={'request': request}).data,
+            }
+
+            logger.info(
+                f"Social authentication successful for {email} with {provider}")
+            return Response(data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Social auth error: {str(e)}")
+            return Response(
+                {"detail": f"Authentication failed: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def _exchange_google_code(self, code, code_verifier=None):
+        """
+        Exchange Google authorization code for tokens and user info.
+        Supports PKCE for enhanced security.
+        """
+        # Exchange code for access token
+        token_url = "https://oauth2.googleapis.com/token"
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/social/google/callback"
+
+        token_payload = {
+            'code': code,
+            'client_id': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY,
+            'client_secret': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code'
+        }
+
+        # Add code_verifier for PKCE if provided
+        if code_verifier:
+            token_payload['code_verifier'] = code_verifier
+            logger.info("Using PKCE code_verifier for Google token exchange")
+
+        # Request access token
+        token_response = requests.post(token_url, data=token_payload)
+
+        if token_response.status_code != 200:
+            logger.error(
+                f"Google token exchange failed: {token_response.text}")
+            raise Exception("Failed to exchange Google code for token")
+
+        token_data = token_response.json()
+        access_token = token_data.get('access_token')
+
+        if not access_token:
+            raise Exception("No access token received from Google")
+
+        # Use access token to get user information
+        userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+        headers = {'Authorization': f'Bearer {access_token}'}
+
+        userinfo_response = requests.get(userinfo_url, headers=headers)
+
+        if userinfo_response.status_code != 200:
+            logger.error(
+                f"Google user info request failed: {userinfo_response.text}")
+            raise Exception("Failed to get user information from Google")
+
+        user_data = userinfo_response.json()
+
+        # Return user info
+        return {
+            'email': user_data.get('email'),
+            'email_verified': user_data.get('email_verified', False),
+            'given_name': user_data.get('given_name', ''),
+            'family_name': user_data.get('family_name', ''),
+            'picture': user_data.get('picture', ''),
+            'sub': user_data.get('sub')  # Unique Google ID
+        }
+
+    def _exchange_github_code(self, code, code_verifier=None):
+        """
+        Exchange GitHub authorization code for tokens and user info.
+        Supports PKCE for enhanced security.
+        """
+        # Exchange code for access token
+        token_url = "https://github.com/login/oauth/access_token"
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/social/github/callback"
+
+        token_payload = {
+            'code': code,
+            'client_id': settings.SOCIAL_AUTH_GITHUB_KEY,
+            'client_secret': settings.SOCIAL_AUTH_GITHUB_SECRET,
+            'redirect_uri': redirect_uri
+        }
+
+        # Add code_verifier for PKCE if provided
+        if code_verifier:
+            token_payload['code_verifier'] = code_verifier
+            logger.info("Using PKCE code_verifier for GitHub token exchange")
+
+        headers = {'Accept': 'application/json'}
+
+        # Request access token
+        token_response = requests.post(
+            token_url, data=token_payload, headers=headers)
+
+        if token_response.status_code != 200:
+            logger.error(
+                f"GitHub token exchange failed: {token_response.text}")
+            raise Exception("Failed to exchange GitHub code for token")
+
+        token_data = token_response.json()
+        access_token = token_data.get('access_token')
+
+        if not access_token:
+            raise Exception("No access token received from GitHub")
+
+        # Use access token to get user information
+        api_headers = {
+            'Authorization': f'token {access_token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+
+        # Get basic user info
+        user_url = "https://api.github.com/user"
+        user_response = requests.get(user_url, headers=api_headers)
+
+        if user_response.status_code != 200:
+            logger.error(
+                f"GitHub user info request failed: {user_response.text}")
+            raise Exception("Failed to get user information from GitHub")
+
+        user_data = user_response.json()
+
+        # GitHub doesn't always return email in user profile, so we need to get it from emails endpoint
+        email = user_data.get('email')
+
+        # If email is not available, try the emails endpoint to get verified email
+        if not email:
+            emails_url = "https://api.github.com/user/emails"
+            emails_response = requests.get(emails_url, headers=api_headers)
+
+            if emails_response.status_code == 200:
+                emails = emails_response.json()
+                # Find primary and verified email
+                primary_email = next((e for e in emails if e.get(
+                    'primary') and e.get('verified')), None)
+                if primary_email:
+                    email = primary_email.get('email')
+                else:
+                    # If no primary email, get first verified email
+                    verified_email = next(
+                        (e for e in emails if e.get('verified')), None)
+                    if verified_email:
+                        email = verified_email.get('email')
+
+        if not email:
+            raise Exception("Could not retrieve verified email from GitHub")
+
+        # Return user info
+        return {
+            'email': email,
+            'name': user_data.get('name', ''),
+            'login': user_data.get('login'),
+            'avatar_url': user_data.get('avatar_url', ''),
+            'id': user_data.get('id')  # Unique GitHub ID
+        }
+
+    def _get_client_ip(self, request):
+        """Get client IP address from request."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+    def _get_device_type(self, user_agent):
+        """Determine device type from user agent."""
+        if not user_agent:
+            return 'Unknown'
+
+        user_agent = user_agent.lower()
+
+        if 'mobile' in user_agent or 'android' in user_agent or 'iphone' in user_agent or 'ipad' in user_agent:
+            return 'Mobile'
+        elif 'tablet' in user_agent:
+            return 'Tablet'
+        else:
+            return 'Desktop'
+
+    def _get_location_from_ip(self, ip):
+        """Get approximate location from IP."""
+        try:
+            # This is a simplified example, in production use a geolocation service
+            hostname = socket.gethostbyaddr(ip)[0]
+            return hostname
+        except:
+            return 'Unknown'
+
+
+class SocialAuthErrorView(views.APIView):
+    """
+    API view to handle social auth errors.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        error = request.GET.get('error', 'Unknown error')
+        error_description = request.GET.get('error_description', '')
+        state = request.GET.get('state', '')
+
+        # Log the error
+        logger.error(f"Social auth error: {error} - {error_description}")
+
+        # Build error message
+        error_message = f"{error}: {error_description}" if error_description else error
+
+        # Redirect to frontend with error and state (if available)
+        redirect_url = f"{settings.FRONTEND_URL}/login?error={error_message}"
+        if state:
+            redirect_url += f"&state={state}"
+
+        return redirect(redirect_url)

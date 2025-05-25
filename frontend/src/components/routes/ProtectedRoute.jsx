@@ -1,8 +1,8 @@
 /**
  * File: frontend/src/components/routes/ProtectedRoute.jsx
- * Version: 2.1.1
- * Date: 2025-08-13 08:20:17
- * Author: cadsanthanam
+ * Version: 2.2.0
+ * Date: 2025-05-21
+ * Author: cadsanthanam (updated)
  * 
  * Smart route protection component with tiered access control
  * 
@@ -10,6 +10,11 @@
  * - Added safety timeout to prevent infinite loading state
  * - Improved error recovery mechanisms
  * - Fixed ACCESS_LEVEL_MAP to align with ContentAccessController
+ * 
+ * ENHANCEMENTS:
+ * - Added intelligent role-based redirects to appropriate dashboards
+ * - Preserved return URL in login redirects for better UX
+ * - Improved loading state handling
  */
 
 import React, { useEffect, useState } from 'react';
@@ -32,6 +37,22 @@ const ACCESS_LEVEL_MAP = {
 
 // Safety timeout duration for access checks (in milliseconds)
 const ACCESS_CHECK_TIMEOUT = 10000; // 10 seconds
+
+/**
+ * Helper function to determine appropriate dashboard based on user role
+ * @param {string} role - User role
+ * @returns {string} - Dashboard path
+ */
+function getDashboardForRole(role) {
+  switch (role) {
+    case 'instructor': 
+      return '/instructor/dashboard';
+    case 'admin':
+      return '/admin/dashboard';
+    default:
+      return '/student/dashboard';
+  }
+}
 
 const ProtectedRoute = ({ 
   children, 
@@ -67,6 +88,7 @@ const ProtectedRoute = ({
         
         // Not authenticated but access requires auth
         if (!isAuthenticated && (requiredRoles.length > 0 || requireEmailVerified || requiredSubscription)) {
+          // Enhanced: Add return URL for better user experience
           setRedirectPath(`/login?redirect=${encodeURIComponent(location.pathname)}`);
           setAccessGranted(false);
           setIsChecking(false);
@@ -93,7 +115,13 @@ const ProtectedRoute = ({
           });
           
           if (!hasRole) {
-            setRedirectPath('/unauthorized');
+            // Enhanced: Redirect to appropriate dashboard based on role
+            // instead of generic unauthorized page
+            const dashboardPath = currentUser && currentUser.role 
+              ? getDashboardForRole(currentUser.role)
+              : '/unauthorized';
+            
+            setRedirectPath(dashboardPath);
             setAccessGranted(false);
             setIsChecking(false);
             clearTimeout(safetyTimeout);

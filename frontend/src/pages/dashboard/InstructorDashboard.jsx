@@ -1,375 +1,374 @@
 /**
- * File: frontend/src/pages/dashboard/InstructorDashboard.jsx
- * Purpose: Dashboard specifically for instructors
+ * File: frontend/src/pages/instructor/InstructorDashboard.jsx
+ * Version: 2.1.3
+ * Date: 2025-05-25 12:30:00
+ * Author: mohithasanthanam
+ * Last Modified: 2025-05-25 12:30:00 UTC
  * 
- * Key features:
- * 1. Shows courses created by the instructor
- * 2. Displays course statistics (enrollments, ratings)
- * 3. Provides course management actions
- * 4. Shows recent activities and student interactions
+ * Instructor Dashboard with Authentication Handling
  * 
- * Updated:
- * - Changed course management links to point to the course detail page
- * - Improved UI for course cards
- * - Fixed course deletion to use slug instead of ID
- * - Improved pagination functionality
+ * This component provides an instructor dashboard with key metrics and course management.
+ * It includes improved authentication handling and redirects to login when needed.
  * 
- * Last updated: 2025-08-01, 10:42:47
+ * Key Improvements:
+ * 1. Proper authentication checking before API calls
+ * 2. Enhanced loading and error states
+ * 3. Improved data fetching with retry capability
+ * 4. Graceful handling of authentication failures
+ * 5. Better user feedback during loading and errors
+ * 6. Auto-redirect to login page on auth failure
+ * 7. Fixed instructor role checking using AuthContext helper
+ * 8. Fixed courses data handling for v2.7.0 API response format
+ * 9. Added auth state guard to prevent race conditions
+ * 10. Improved statistics mapping for consistent field names
+ * 
+ * Connected files that need to be consistent:
+ * - frontend/src/services/instructorService.js (provides data for dashboard)
+ * - frontend/src/services/api.js (handles authentication)
+ * - frontend/src/contexts/AuthContext.jsx (manages auth state)
+ * - frontend/src/components/layouts/MainLayout.jsx (wrapper layout)
+ * - frontend/src/components/common/LoadingScreen.jsx (loading indicator)
+ * - frontend/src/components/common/Alert.jsx (error/info messages)
+ * - frontend/src/components/common/Button.jsx (buttons with loading state)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import MainLayout from '../../components/layouts/MainLayout';
+import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
+import Alert from '../../components/common/Alert';
+import LoadingScreen from '../../components/common/LoadingScreen';
 import instructorService from '../../services/instructorService';
-import { useAuth } from '../../contexts/AuthContext';
-import { Button } from '@mui/material';
+import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext'; // Using consistent relative path
 
 const InstructorDashboard = () => {
-  const { currentUser } = useAuth();
   const [courses, setCourses] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [deletingCourse, setDeletingCourse] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState(false);
-  const [pagination, setPagination] = useState({
-    limit: 9,
-    offset: 0,
-    total: 0,
-    hasMore: true
-  });
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Used to trigger data refresh
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchInstructorData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const coursesResponse = await instructorService.getAllCourses({
-          limit: pagination.limit,
-          offset: pagination.offset
-        });
-        
-        if (coursesResponse && coursesResponse.results) {
-          setCourses(coursesResponse.results);
-          setPagination(prev => ({
-            ...prev,
-            total: coursesResponse.count || 0,
-            hasMore: Boolean(coursesResponse.next)
-          }));
-        } else {
-          setCourses(coursesResponse || []);
-          setPagination(prev => ({
-            ...prev,
-            total: coursesResponse?.length || 0,
-            hasMore: false
-          }));
-        }
-        
-        try {
-          const statsResponse = await instructorService.getInstructorStatistics();
-          setStats(statsResponse || {
-            total_students: 0,
-            total_courses: 0,
-            average_rating: 0,
-            recent_enrollments: 0
-          });
-        } catch (statsError) {
-          console.error('Could not fetch instructor stats:', statsError);
-          // Ensure courseCount is not 0 to avoid division by zero
-          const courseCount = courses.length || 1;
-          // Fix NaN in stats calculations
-          setStats({
-            total_students: courses.reduce((sum, course) => sum + (course.students_count || 0), 0),
-            total_courses: courses.length,
-            average_rating: courses.reduce((sum, course) => sum + (course.avg_rating || 0), 0) / courseCount,
-            recent_enrollments: 0
-          });
-        }
-        
-      } catch (err) {
-        console.error('Error fetching instructor data:', err);
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInstructorData();
-  }, [currentUser?.id, pagination.offset, pagination.limit]);
-
-  const handleDeleteCourse = async (courseId) => {
-    try {
-      setDeletingCourse(courseId);
-      
-      const courseToDelete = courses.find(c => c.id === courseId);
-      if (!courseToDelete) {
-        throw new Error('Course not found');
-      }
-      
-      // Use the course slug for deletion rather than ID
-      const slug = courseToDelete.slug;
-      if (!slug) {
-        throw new Error('Course slug not found');
-      }
-      
-      await instructorService.deleteCourse(slug);
-      
-      setCourses(courses.filter(course => course.id !== courseId));
-      setDeleteConfirmation(false);
-      setDeletingCourse(null);
-      
-      setStats(prev => ({
-        ...prev,
-        total_courses: (prev.total_courses || courses.length) - 1
-      }));
-    } catch (error) {
-      console.error('Error deleting course:', error);
-      setError(`Failed to delete course: ${error.message || 'Unknown error occurred'}`);
-      setDeletingCourse(null);
+  const { isAuthenticated, isInstructor } = useAuth(); // Fixed: use isInstructor helper instead of currentUser
+  
+  // Refresh data function - can be called after operations that modify data
+  const refreshData = () => {
+    setRefreshKey(prevKey => prevKey + 1);
+  };
+  
+  // Check authentication status before API calls
+  const checkAuthBeforeFetch = useCallback(async () => {
+    // Guard against auth race condition - wait until auth state is known
+    if (isAuthenticated === null) {
+      return false; // Auth state not yet determined
     }
-  };
-
-  const confirmDeleteCourse = (course) => {
-    setDeletingCourse(course);
-    setDeleteConfirmation(true);
-  };
-
-  const cancelDelete = () => {
-    setDeletingCourse(null);
-    setDeleteConfirmation(false);
-  };
-
-  const loadMoreCourses = async () => {
-    if (!pagination.hasMore || loadingMore) return;
+    
+    // Check if user is authenticated using the auth context
+    if (!isAuthenticated) {
+      console.log('User is not authenticated, redirecting to login page');
+      navigate('/login?redirect=/instructor/dashboard');
+      return false;
+    }
+    
+    // Check if user is an instructor - Fixed: use isInstructor() helper
+    if (!isInstructor()) {
+      console.log('User is not an instructor, redirecting to home page');
+      navigate('/');
+      return false;
+    }
+    
+    // Also check API's auth status as a fallback
+    if (!api.isAuthenticated()) {
+      try {
+        // Try to refresh the token
+        await api.auth.refreshToken();
+        return true; // Token refreshed successfully
+      } catch (error) {
+        console.error('Failed to refresh token:', error);
+        
+        // Redirect to login page
+        navigate('/login?redirect=/instructor/dashboard');
+        return false; // Token refresh failed
+      }
+    }
+    
+    return true; // User is authenticated
+  }, [isAuthenticated, isInstructor, navigate]); // Updated dependencies
+  
+  // Fetch instructor data function
+  const fetchInstructorData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     
     try {
-      setLoadingMore(true);
-      const newOffset = pagination.offset + pagination.limit;
+      // Check authentication first
+      const isAuthorized = await checkAuthBeforeFetch();
+      if (!isAuthorized) return;
       
-      const moreCoursesResponse = await instructorService.getAllCourses({
-        limit: pagination.limit,
-        offset: newOffset
+      // Fetch courses - Fixed: handle new API response format
+      let normalizedCourses = [];
+      try {
+        const coursesResp = await instructorService.getAllCourses();
+        
+        // Handle both old array format and new { results: [...] } format
+        normalizedCourses = Array.isArray(coursesResp)
+          ? coursesResp
+          : coursesResp?.results ?? [];
+        
+      } catch (error) {
+        console.error('Failed to fetch courses:', error);
+        
+        if (error.status === 401) {
+          // Authentication error, redirect to login
+          navigate('/login?redirect=/instructor/dashboard');
+          throw new Error('Authentication failed, please log in again');
+        } else {
+          // Other errors, display them
+          throw error;
+        }
+      }
+      
+      // Fetch statistics
+      let statsData = {};
+      try {
+        const rawStatsData = await instructorService.getInstructorStatistics();
+        
+        // Map statistics fields to handle potential field name differences
+        statsData = {
+          totalCourses: rawStatsData.totalCourses || rawStatsData.coursesCreated || normalizedCourses.length,
+          totalStudents: rawStatsData.totalStudents || 0,
+          totalRevenue: rawStatsData.totalRevenue || 0,
+          recentEnrollments: rawStatsData.recentEnrollments || 0
+        };
+        
+      } catch (error) {
+        console.error('Failed to fetch statistics:', error);
+        // Don't fail the whole dashboard if only stats fail
+        statsData = {
+          totalCourses: normalizedCourses.length || 0,
+          totalStudents: 0,
+          totalRevenue: 0,
+          recentEnrollments: 0
+        };
+      }
+      
+      // Update state with fetched data
+      setCourses(normalizedCourses);
+      
+      // Ensure totalCourses always reflects actual course count
+      setStatistics({
+        totalCourses: normalizedCourses.length,
+        ...statsData,
       });
       
-      if (moreCoursesResponse && moreCoursesResponse.results) {
-        setCourses(prev => [...prev, ...moreCoursesResponse.results]);
-        setPagination(prev => ({
-          ...prev,
-          offset: newOffset,
-          total: moreCoursesResponse.count || prev.total,
-          hasMore: Boolean(moreCoursesResponse.next)
-        }));
-      } else {
-        setCourses(prev => [...prev, ...(moreCoursesResponse || [])]);
-        setPagination(prev => ({
-          ...prev,
-          offset: newOffset,
-          hasMore: false
-        }));
-      }
     } catch (error) {
-      console.error('Error loading more courses:', error);
-      setError('Failed to load more courses. Please try again.');
+      console.error('Error fetching instructor data:', error);
+      
+      // Format error message
+      const errorMessage = error.message || 'Failed to load dashboard data';
+      setError(errorMessage);
+      
+      // Set empty data
+      setCourses([]);
+      setStatistics(null);
     } finally {
-      setLoadingMore(false);
+      setLoading(false);
+    }
+  }, [checkAuthBeforeFetch, navigate]);
+  
+  // Fetch data on component mount and when refreshKey changes
+  useEffect(() => {
+    // Only fetch data if auth state is known (not null)
+    if (isAuthenticated !== null) {
+      fetchInstructorData();
+    }
+  }, [fetchInstructorData, refreshKey, isAuthenticated]);
+  
+  // Redirect if not authenticated or not an instructor
+  useEffect(() => {
+    // Guard against auth race condition
+    if (isAuthenticated === null) {
+      return; // Wait until auth state is determined
+    }
+    
+    // If we have explicit authentication status from context
+    if (isAuthenticated === false) {
+      navigate('/login?redirect=/instructor/dashboard');
+    } else if (isAuthenticated === true && !isInstructor()) {
+      // Fixed: use isInstructor() helper for consistent checking
+      navigate('/');
+    }
+  }, [isAuthenticated, isInstructor, navigate]);
+  
+  // Handle course deletion
+  const handleDeleteCourse = async (courseSlug) => {
+    if (!window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await instructorService.deleteCourse(courseSlug);
+      
+      // Refresh courses list after deletion
+      refreshData();
+      
+      // Show success message
+      alert('Course deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete course:', error);
+      alert(`Failed to delete course: ${error.message || 'Unknown error'}`);
     }
   };
-
-  if (loading) {
+  
+  // Show loading screen while auth state is being determined or data is loading
+  if (isAuthenticated === null || loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700"></div>
-        <span className="ml-3 text-primary-700">Loading your dashboard...</span>
-      </div>
+      <MainLayout>
+        <LoadingScreen message="Loading instructor dashboard..." />
+      </MainLayout>
     );
   }
-
+  
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Instructor Dashboard</h1>
-        <p className="mt-2 text-gray-600">Manage your courses and track performance</p>
-      </div>
-
-      {error && (
-        <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-              <button 
-                onClick={() => setError(null)} 
-                className="mt-2 text-sm font-medium text-red-700 hover:text-red-600"
+    <MainLayout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold mb-4 md:mb-0">Instructor Dashboard</h1>
+          
+          <Link to="/instructor/courses/new">
+            <Button variant="primary">Create New Course</Button>
+          </Link>
+        </div>
+        
+        {error && (
+          <Alert type="error" className="mb-6">
+            {error}
+            <div className="mt-2">
+              <Button 
+                size="small" 
+                variant="outline" 
+                onClick={refreshData}
               >
-                Dismiss
-              </button>
+                Try Again
+              </Button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {deleteConfirmation && deletingCourse && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Course Deletion</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete the course "<span className="font-semibold">{deletingCourse.title}</span>"? 
-              This action cannot be undone.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={cancelDelete}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteCourse(deletingCourse.id)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Delete Course
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-8 bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-500">Total Courses</p>
-            <p className="text-2xl font-bold">{stats?.total_courses || courses.length}</p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-500">Total Students</p>
-            <p className="text-2xl font-bold">{stats?.total_students || 0}</p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-500">Average Rating</p>
-            <p className="text-2xl font-bold">{(stats?.average_rating || 0).toFixed(1)}</p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-500">New Enrollments</p>
-            <p className="text-2xl font-bold">{stats?.recent_enrollments || 0}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">My Courses</h2>
-          <Button
-            color="primary"
-            variant="contained"
-            className="ml-2"
-            onClick={() => navigate('/instructor/courses/wizard')}
-          >
-            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Create Course with Wizard
-          </Button>
-        </div>
-
-        {courses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map(course => (
-              <div key={course.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                <img 
-                  src={course.thumbnail || "/default-course.jpg"} 
-                  alt={course.title} 
-                  className="w-full h-48 object-cover"
-                />
-                <div className="p-4">
-                  <h3 className="text-lg font-medium text-gray-900">{course.title}</h3>
-                  
-                  <div className="mt-2 flex justify-between">
-                    <span className="text-sm text-gray-600">
-                      {course.students_count || 0} students enrolled
-                    </span>
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      <span className="ml-1 text-sm text-gray-600">
-                        {course.avg_rating?.toFixed(1) || '0.0'} ({course.reviews_count || 0})
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <Link 
-                      to={`/courses/${course.slug}`} 
-                      className="bg-primary-600 text-white text-center py-2 rounded hover:bg-primary-700"
-                    >
-                      Manage Course
-                    </Link>
-                    <Link 
-                      to={`/instructor/courses/${course.slug}/edit`} 
-                      className="bg-gray-200 text-gray-800 text-center py-2 rounded hover:bg-gray-300"
-                    >
-                      Edit Course
-                    </Link>
-                  </div>
-                  
-                  <div className="mt-2">
-                    <button
-                      onClick={() => confirmDeleteCourse(course)}
-                      className="w-full text-red-600 text-sm py-1 hover:text-red-700"
-                    >
-                      Delete Course
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <p className="text-gray-600 mb-4">You haven't created any courses yet.</p>
-            <Link 
-              to="/instructor/courses/wizard" 
-              className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700"
-            >
-              Create Your First Course
-            </Link>
+          </Alert>
+        )}
+        
+        {statistics && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="p-6 bg-primary-50">
+              <h3 className="text-lg font-medium text-primary-700 mb-2">Total Courses</h3>
+              <p className="text-3xl font-bold text-primary-900">{statistics.totalCourses || 0}</p>
+            </Card>
+            
+            <Card className="p-6 bg-secondary-50">
+              <h3 className="text-lg font-medium text-secondary-700 mb-2">Total Students</h3>
+              <p className="text-3xl font-bold text-secondary-900">{statistics.totalStudents || 0}</p>
+            </Card>
+            
+            <Card className="p-6 bg-tertiary-50">
+              <h3 className="text-lg font-medium text-tertiary-700 mb-2">Total Revenue</h3>
+              <p className="text-3xl font-bold text-tertiary-900">
+                ${(statistics.totalRevenue || 0).toFixed(2)}
+              </p>
+            </Card>
+            
+            <Card className="p-6 bg-green-50">
+              <h3 className="text-lg font-medium text-green-700 mb-2">Recent Enrollments</h3>
+              <p className="text-3xl font-bold text-green-900">{statistics.recentEnrollments || 0}</p>
+            </Card>
           </div>
         )}
         
-        {/* Pagination controls */}
-        {pagination.hasMore && (
-          <div className="mt-8 text-center">
-            <button
-              onClick={loadMoreCourses}
-              disabled={loadingMore}
-              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded shadow hover:bg-gray-50 disabled:opacity-50"
-            >
-              {loadingMore ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Loading more...
-                </span>
-              ) : 'Load More Courses'}
-            </button>
-          </div>
-        )}
-        
-        {/* Pagination info */}
-        <div className="mt-4 text-center text-sm text-gray-600">
-          Showing {courses.length} of {pagination.total} total courses
-        </div>
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Your Courses</h2>
+          
+          {courses.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-4">You haven't created any courses yet.</p>
+              <Link to="/instructor/courses/new">
+                <Button variant="primary">Create Your First Course</Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="text-left p-4 border-b">Title</th>
+                    <th className="text-left p-4 border-b">Status</th>
+                    <th className="text-left p-4 border-b">Students</th>
+                    <th className="text-left p-4 border-b">Revenue</th>
+                    <th className="text-left p-4 border-b">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {courses.map((course) => (
+                    <tr key={course.id} className="hover:bg-gray-50">
+                      <td className="p-4 border-b">
+                        <div className="flex items-center">
+                          {course.thumbnail && (
+                            <img 
+                              src={course.thumbnail} 
+                              alt={course.title} 
+                              className="w-12 h-12 object-cover rounded-md mr-3"
+                            />
+                          )}
+                          <div>
+                            <h3 className="font-medium">{course.title}</h3>
+                            <p className="text-sm text-gray-500">{course.category?.name || 'Uncategorized'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 border-b">
+                        <span 
+                          className={`px-2 py-1 rounded-full text-xs font-medium
+                            ${course.is_published 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                        >
+                          {course.is_published ? 'Published' : 'Draft'}
+                        </span>
+                      </td>
+                      <td className="p-4 border-b">
+                        {course.student_count || 0}
+                      </td>
+                      <td className="p-4 border-b">
+                        ${(course.revenue || 0).toFixed(2)}
+                      </td>
+                      <td className="p-4 border-b">
+                        <div className="flex space-x-2">
+                          <Link to={`/instructor/courses/${course.slug}/edit`}>
+                            <Button variant="outline" size="small">
+                              Edit
+                            </Button>
+                          </Link>
+                          <Link to={`/instructor/courses/${course.slug}/curriculum`}>
+                            <Button variant="outline" size="small">
+                              Curriculum
+                            </Button>
+                          </Link>
+                          <Button 
+                            variant="danger" 
+                            size="small"
+                            onClick={() => handleDeleteCourse(course.slug)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

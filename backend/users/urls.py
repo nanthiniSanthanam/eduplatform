@@ -20,7 +20,9 @@ from .views import (
     ProfileView, PasswordChangeView,
     PasswordResetRequestView, PasswordResetConfirmView,
     EmailVerificationView, ResendVerificationView,
-    UserSessionViewSet, SubscriptionViewSet
+    UserSessionViewSet, SubscriptionViewSet,
+    SocialAuthGoogleView, SocialAuthGithubView,
+    SocialAuthCompleteView, SocialAuthErrorView
 )
 
 # Router for viewsets
@@ -56,4 +58,15 @@ urlpatterns = [
 
     # Include router URLs
     path('', include(router.urls)),
+]
+# Add these to your existing urlpatterns
+urlpatterns += [
+    path('social-auth/', include('social_django.urls', namespace='social')),
+
+    # Custom endpoints for social auth
+    path('social/google/', SocialAuthGoogleView.as_view(), name='social-google'),
+    path('social/github/', SocialAuthGithubView.as_view(), name='social-github'),
+    path('social/complete/', SocialAuthCompleteView.as_view(),
+         name='social-complete'),
+    path('social/error/', SocialAuthErrorView.as_view(), name='social-error'),
 ]

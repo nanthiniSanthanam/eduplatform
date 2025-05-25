@@ -1,8 +1,8 @@
 /**
  * File: frontend/src/pages/courses/CourseContentPage.jsx
- * Version: 1.0.0
- * Date: 2025-05-15 14:45:00
- * Author: Developed by GitHub Copilot based on project requirements
+ * Version: 1.1.0
+ * Date: 2025-05-16 18:55:23
+ * Author: cadsanthanam (Updated by GitHub Copilot)
  * 
  * Course Content Page component for displaying lesson content with tiered access
  * 
@@ -17,6 +17,11 @@
  * - basic: Unregistered users - preview content
  * - intermediate: Registered users - standard content
  * - advanced: Premium/paid users - full content with premium resources
+ * 
+ * Changes in v1.1.0:
+ * - Fixed tab switching issues with key={activeTab} on tab content parent div
+ * - Added handleTabChange to normalize tab values from Tabs component
+ * - Added auto-focus for notes textarea when opening Notes tab
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -29,14 +34,23 @@ import {
 import { courseService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { MainLayout } from '../../components/layouts';
+import LearningHeaderArea from './LearningHeaderWidgets';
 
 // Tab identifiers
-const TABS = {
+export const TABS = {
   CONTENT: 'content',
   RESOURCES: 'resources',
   ASSESSMENT: 'assessment',
   NOTES: 'notes'
 };
+
+const TAB_ORDER = [
+    TABS.CONTENT,
+    TABS.RESOURCES,
+    TABS.ASSESSMENT,
+    TABS.NOTES
+  ];
+
 
 const CourseContentPage = () => {
   const { courseSlug, moduleId, lessonId } = useParams();
@@ -63,6 +77,33 @@ const CourseContentPage = () => {
   // Refs
   const contentRef = useRef(null);
   const noteInputRef = useRef(null);
+  
+  // Normalize tab value - handles various possible values from Tabs component
+ 
+  const handleTabChange = (eventOrValue, maybeValue) => {
+    let newVal =
+      typeof eventOrValue === 'string' ? eventOrValue :
+      typeof maybeValue   === 'string' ? maybeValue   :
+      // ⇣ if it’s a number (the usual “index” pattern)
+      (typeof eventOrValue === 'number' ? TAB_ORDER[eventOrValue] :
+       typeof maybeValue   === 'number' ? TAB_ORDER[maybeValue]   :
+       eventOrValue?.target?.dataset?.tabId);
+  
+    // safety-net: unknown → stick with current tab instead of resetting
+    if (!newVal || !Object.values(TABS).includes(newVal)) return;
+  
+    setActiveTab(newVal);
+  };
+
+
+
+  
+  // Auto-focus notes textarea when opening Notes tab
+  useEffect(() => {
+    if (activeTab === TABS.NOTES && noteInputRef.current) {
+      noteInputRef.current.focus();
+    }
+  }, [activeTab]);
   
   // Effect for fetching course data
   useEffect(() => {
@@ -326,7 +367,7 @@ const CourseContentPage = () => {
   
   const { nextLesson, prevLesson } = getAdjacentLessons();
   
-  // Get access level icon
+  // Get access level icon - Enhanced to match CourseLandingPage implementation
   const getAccessLevelIcon = (accessLevel) => {
     switch(accessLevel || 'basic') {
       case 'advanced':
@@ -406,6 +447,22 @@ const CourseContentPage = () => {
   
   return (
     <MainLayout>
+      <LearningHeaderArea 
+  currentUser={currentUser} 
+  lesson={lesson} 
+  course={course}
+  display={{
+    insights: false,
+    quote: true,
+    smartStudy: false,
+    timer: false,
+    community: false,
+    career: false,
+    resources: false,
+    microlearning: false,
+    aiCompanion: false,
+  }}
+/>
       <div className="min-h-screen bg-gray-50">
         {/* Breadcrumbs */}
         <div className="bg-white border-b border-gray-200 py-3">
@@ -481,8 +538,12 @@ const CourseContentPage = () => {
                         const isActive = les.id.toString() === lessonId;
                         const hasCompleted = les.is_completed;
                         
-                        // Determine access level
-                        const lessonAccessLevel = les.access_level || 'basic';
+                        // Enhanced access level determination - check all possible property paths
+                        const lessonAccessLevel = 
+                          les.accessLevel || 
+                          les.access_level || 
+                          (les.metadata && (les.metadata.accessLevel || les.metadata.access_level)) || 
+                          'basic';
                         
                         return (
                           <li key={les.id}>
@@ -557,20 +618,20 @@ const CourseContentPage = () => {
                   )}
                 </div>
                 
-                {/* Tab Navigation */}
+                {/* Tab Navigation - UPDATED with handleTabChange */}
                 <Tabs
                   tabs={[
-                    { id: TABS.CONTENT, label: 'Content' },
-                    { id: TABS.RESOURCES, label: 'Resources', badge: lesson.resources?.length || 0 },
-                    { id: TABS.ASSESSMENT, label: 'Assessment', disabled: !lesson.has_assessment },
-                    { id: TABS.NOTES, label: 'Notes', disabled: !isAuthenticated }
+                    { value: TABS.CONTENT, label: 'Content' },
+                    { value: TABS.RESOURCES, label: 'Resources', badge: lesson.resources?.length || 0 },
+                    { value: TABS.ASSESSMENT, label: 'Assessment', disabled: !lesson.has_assessment },
+                    { value: TABS.NOTES, label: 'Notes', disabled: !isAuthenticated }
                   ]}
-                  activeTab={activeTab}
-                  onChange={setActiveTab}
+                  value={activeTab}
+                  onChange={handleTabChange}
                 />
-                
+               
                 {/* Tab Content */}
-                <div className="mt-6">
+                <div className="mt-6" key={activeTab}>
                   {/* Content Tab */}
                   {activeTab === TABS.CONTENT && (
                     <div className="space-y-6">
@@ -997,122 +1058,121 @@ const CourseContentPage = () => {
                                       Passing Score: {lesson.assessment?.passing_score || 70}%
                                     </div>
                                     <div className="flex items-center text-sm text-blue-700">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                      </svg>
-                                      Questions: {lesson.assessment?.questions?.length || 0}
-                                    </div>
-                                  </div>
-                                  <div className="mt-6">
-                                    {/* For simplicity, link to the assessment page */}
-                                    <Button
-                                      color="primary"
-                                      onClick={() => navigate(`/courses/${courseSlug}/assessment/${lesson.assessment?.id}`)}
-                                    >
-                                      Start Assessment
-                                    </Button>
-                                  </div>
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                  Questions: {lesson.assessment?.questions?.length || 0}
                                 </div>
                               </div>
+                              <div className="mt-6">
+                                {/* For simplicity, link to the assessment page */}
+                                <Button
+                                  color="primary"
+                                  onClick={() => navigate(`/courses/${courseSlug}/assessment/${lesson.assessment?.id}`)}
+                                >
+                                  Start Assessment
+                                </Button>
+                              </div>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                        <p className="text-gray-500">No assessment available for this lesson.</p>
+                      </div>
+                    )}
+                  </ContentAccessController>
+                </div>
+              )}
+              
+              {/* Notes Tab */}
+              {activeTab === TABS.NOTES && (
+                <div>
+                  <h2 className="text-xl font-bold mb-4">Your Notes</h2>
+                  
+                  {/* Only show notes to authenticated users */}
+                  {!isAuthenticated ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                      <h3 className="font-bold mb-2">Sign In to Take Notes</h3>
+                      <p className="mb-4">Notes are available for registered users. Sign in to save your notes for this lesson.</p>
+                      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                        <Button
+                          color="primary"
+                          onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
+                        >
+                          Sign In
+                        </Button>
+                        <Button
+                          color="secondary"
+                          onClick={() => navigate('/register')}
+                        >
+                          Register
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <textarea
+                          className="w-full h-48 p-4 border border-gray-300 rounded-lg
+                                     focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          value={userNote}
+                          onChange={(e) => setUserNote(e.target.value)}
+                          placeholder="Take notes on this lesson..."
+                          ref={noteInputRef}
+                        ></textarea>
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            color="primary"
+                            onClick={handleSaveNote}
+                            disabled={noteSaving || !userNote.trim()}
+                          >
+                            {noteSaving ? (
+                              <><Spinner color="white" size="small" /> Saving...</>
+                            ) : (
+                              <>Save Note</>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Previous notes */}
+                      <div>
+                        <h3 className="text-lg font-medium mb-3">Previous Notes</h3>
+                        {savedNotes.length > 1 ? (
+                          <div className="space-y-4">
+                            {savedNotes.slice(1).map((note) => (
+                              <Card key={note.id} className="p-4">
+                                <div className="flex justify-between items-start">
+                                  <div className="prose prose-sm max-w-none">
+                                    <p>{note.content}</p>
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(note.updated_date || note.created_date).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              </Card>
+                            ))}
                           </div>
                         ) : (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-                            <p className="text-gray-500">No assessment available for this lesson.</p>
+                          <div className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                            <p>No previous notes for this lesson</p>
                           </div>
                         )}
-                      </ContentAccessController>
-                    </div>
-                  )}
-                  
-                  {/* Notes Tab */}
-                  {activeTab === TABS.NOTES && (
-                    <div>
-                      <h2 className="text-xl font-bold mb-4">Your Notes</h2>
-                      
-                      {/* Only show notes to authenticated users */}
-                      {!isAuthenticated ? (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-                          <h3 className="font-bold mb-2">Sign In to Take Notes</h3>
-                          <p className="mb-4">Notes are available for registered users. Sign in to save your notes for this lesson.</p>
-                          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-                            <Button
-                              color="primary"
-                              onClick={() => navigate('/login', { state: { from: window.location.pathname } })}
-                            >
-                              Sign In
-                            </Button>
-                            <Button
-                              color="secondary"
-                              onClick={() => navigate('/register')}
-                            >
-                              Register
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-6">
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <textarea
-                              className="w-full h-48 p-4 border border-gray-300 rounded-lg
-                                                            focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                              value={userNote}
-                              onChange={(e) => setUserNote(e.target.value)}
-                              placeholder="Take notes on this lesson..."
-                              ref={noteInputRef}
-                            ></textarea>
-                            <div className="flex justify-end mt-2">
-                              <Button
-                                color="primary"
-                                onClick={handleSaveNote}
-                                disabled={noteSaving || !userNote.trim()}
-                              >
-                                {noteSaving ? (
-                                  <><Spinner color="white" size="small" /> Saving...</>
-                                ) : (
-                                  <>Save Note</>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {/* Previous notes */}
-                          <div>
-                            <h3 className="text-lg font-medium mb-3">Previous Notes</h3>
-                            {savedNotes.length > 1 ? (
-                              <div className="space-y-4">
-                                {savedNotes.slice(1).map((note) => (
-                                  <Card key={note.id} className="p-4">
-                                    <div className="flex justify-between items-start">
-                                      <div className="prose prose-sm max-w-none">
-                                        <p>{note.content}</p>
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        {new Date(note.updated_date || note.created_date).toLocaleDateString()}
-                                      </div>
-                                    </div>
-                                  </Card>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
-                                <p>No previous notes for this lesson</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </MainLayout>
-  );
-};
+    </div>
+  </div>
+</MainLayout>
+); };
 
 export default CourseContentPage;

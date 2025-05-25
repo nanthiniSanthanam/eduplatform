@@ -1,7 +1,15 @@
 /**
- * Common Components Index
+ * File: frontend/src/components/common/index.js
+ * Version: 2.1.2
+ * Date: 2025-05-24 12:00:00
+ * Author: mohithasanthanam
+ * Last Modified: 2025-05-24 12:00:00 UTC
+ * 
+ * Common Components Index - Central Export Hub
  * 
  * This file serves as a central export point for all common/reusable components.
+ * Enhanced exports for course creation workflow components with backend compatibility.
+ * 
  * This pattern provides several benefits:
  * 
  * 1. Simplified Imports: Instead of importing each component individually from its own file,
@@ -16,6 +24,17 @@
  * 
  * 4. Discoverability: New team members can quickly see what components are available
  *    by looking at this file.
+ * 
+ * Key Improvements:
+ * 1. Added ContentAccessController for restricted content handling
+ * 2. Added utility functions compatible with existing backend
+ * 3. Better organization and documentation
+ * 4. Case-insensitive pattern matching for content restrictions
+ * 
+ * Connected files that import from this index:
+ * - frontend/src/pages/instructor/CourseWizard.jsx - Course creation UI
+ * - frontend/src/pages/instructor/wizardSteps/*.jsx - Wizard step components
+ * - All other components that use common UI elements
  */
 
 // UI Elements
@@ -36,15 +55,16 @@ import ResumeButton from './ResumeButton';
 import BookmarksList from './BookmarksList';
 import Spinner from './Spinner';
 import ErrorBoundary from './ErrorBoundary';
+
 // Form Elements
 import FormInput from './FormInput';
+import TagInput from './TagInput';
 
 // Layout Components
 import Modal from './Modal';
 import Tabs from './Tabs';
 import Accordion from './Accordion';
 import StepIndicator from './StepIndicator';
-import TagInput from './TagInput';
 import ResourceCard from './ResourceCard';
 import SearchBar from './SearchBar';
 import Sidebar from './Sidebar';
@@ -53,48 +73,48 @@ import Dropdown from './Dropdown';
 import Pagination from './Pagination';
 import ProfileBadge from './ProfileBadge';
 
-// Export individual components
+// Export individual components (alphabetically ordered for better discoverability)
 export {
   // UI Elements
+  Accordion,
+  Alert,
+  AnimatedElement,
+  Avatar,
+  Badge,
+  BookmarksList,
   Button,
   Card,
-  Container,
-  Badge,
-  Avatar,
-  Rating,
-  Alert,
-  ProgressBar,
-  Skeleton,
-  TextSkeleton,
   CardSkeleton,
-  Tooltip,
-  AnimatedElement,
   Certificate,
-  LoadingScreen,
-  ResumeButton,
-  BookmarksList,
-  Spinner,
+  Container,
+  ContentAccessController,
+  Dropdown,
   ErrorBoundary,
   
   // Form Elements
   FormInput,
-  TagInput,
   
   // Layout Components
+  LoadingScreen,
   Modal,
-  Tabs,
-  Accordion,
-  StepIndicator,
+  Pagination,
+  ProfileBadge,
+  ProgressBar,
+  Rating,
   ResourceCard,
+  ResumeButton,
   SearchBar,
   Sidebar,
-  ContentAccessController,
-  Dropdown,
-  Pagination,
-  ProfileBadge
+  Skeleton,
+  Spinner,
+  StepIndicator,
+  Tabs,
+  TagInput,
+  TextSkeleton,
+  Tooltip
 };
 
-// Export utility functions
+// Export utility functions compatible with existing backend
 export const getInitials = (name) => {
   if (!name) return '';
   return name
@@ -102,6 +122,151 @@ export const getInitials = (name) => {
     .map(part => part[0])
     .join('')
     .toUpperCase();
+};
+
+/**
+ * Format duration string for display
+ * @param {string|number} duration - Duration string (e.g., "15 minutes", "2 hours") or number (minutes)
+ * @returns {string} - Formatted duration
+ */
+export const formatDuration = (duration) => {
+  if (!duration) return '';
+  
+  // Handle numeric values (assume minutes)
+  if (typeof duration === 'number') {
+    if (duration < 60) {
+      return `${duration} min`;
+    } else {
+      const hours = Math.floor(duration / 60);
+      const minutes = duration % 60;
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  }
+  
+  // Handle string values
+  if (typeof duration === 'string') {
+    return duration.toLowerCase()
+      .replace('minutes', 'min')
+      .replace('minute', 'min')
+      .replace('hours', 'h')
+      .replace('hour', 'h');
+  }
+  
+  return duration;
+};
+
+/**
+ * Get access level display name (compatible with existing backend choices)
+ * @param {string} level - Access level ('basic', 'intermediate', 'advanced')
+ * @returns {string} - Display name
+ */
+export const getAccessLevelDisplay = (level) => {
+  const levels = {
+    'basic': 'Basic',
+    'intermediate': 'Intermediate', 
+    'advanced': 'Advanced'
+  };
+  return levels[level] || level;
+};
+
+/**
+ * Get access level color for UI
+ * @param {string} level - Access level
+ * @returns {string} - CSS color class
+ */
+export const getAccessLevelColor = (level) => {
+  const colors = {
+    'basic': 'text-gray-600',
+    'intermediate': 'text-blue-600',
+    'advanced': 'text-purple-600'
+  };
+  return colors[level] || 'text-gray-600';
+};
+
+/**
+ * Format price for display
+ * @param {number|string} price - Price value
+ * @param {string} currency - Currency symbol (default: ₹)
+ * @returns {string} - Formatted price
+ */
+export const formatPrice = (price, currency = '₹') => {
+  // Handle explicit zero as a valid price (₹0.00)
+  if (price === 0) return `${currency}0`;
+  
+  // Handle null, undefined, empty string as "Free"
+  if (price == null || price === '') return 'Free';
+  
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  if (isNaN(numPrice)) return 'Free';
+  
+  return `${currency}${numPrice.toLocaleString()}`;
+};
+
+/**
+ * Validate lesson form data (compatible with existing backend validation)
+ * @param {Object} lessonData - Lesson form data
+ * @returns {Array} - Array of validation errors
+ */
+export const validateLessonData = (lessonData) => {
+  const errors = [];
+  
+  if (!lessonData.title || !lessonData.title.trim()) {
+    errors.push('Lesson title is required');
+  }
+  
+  if (!lessonData.access_level) {
+    errors.push('Access level is required');
+  }
+  
+  // Validate content based on access level (matching backend logic)
+  const { access_level, content, basic_content, intermediate_content } = lessonData;
+  
+  if (access_level === 'basic' && (!basic_content || !basic_content.trim())) {
+    errors.push('Basic content is required for basic access level lessons');
+  }
+  
+  if (access_level === 'intermediate' && 
+      (!intermediate_content || !intermediate_content.trim()) && 
+      (!content || !content.trim())) {
+    errors.push('Either intermediate content or full content is required for intermediate access level lessons');
+  }
+  
+  if (access_level === 'advanced' && (!content || !content.trim())) {
+    errors.push('Full content is required for advanced access level lessons');
+  }
+  
+  // Ensure at least one content field is provided
+  if ((!content || !content.trim()) && 
+      (!basic_content || !basic_content.trim()) && 
+      (!intermediate_content || !intermediate_content.trim())) {
+    errors.push('At least one content field must be provided');
+  }
+  
+  return errors;
+};
+
+/**
+ * Check if HTML content is from restricted access (contains specific patterns)
+ * This helps identify if content is a restriction message from backend utils
+ * Uses case-insensitive matching for better detection
+ * @param {string} content - HTML content string
+ * @returns {boolean} - True if content appears to be a restriction message
+ */
+export const isRestrictedContent = (content) => {
+  if (!content || typeof content !== 'string') return false;
+  
+  // Normalize content to lowercase for case-insensitive matching
+  const lowerContent = content.toLowerCase();
+  
+  // Check for patterns that indicate restriction messages from backend utils
+  const restrictionPatterns = [
+    'premium-content-notice',
+    'preview-content',
+    'requires a premium subscription',
+    'register for free to access'
+  ];
+  
+  return restrictionPatterns.some(pattern => lowerContent.includes(pattern));
 };
 
 /**
@@ -115,15 +280,27 @@ export const getInitials = (name) => {
  *    
  * 3. Import with alias:
  *    import { Button as CustomButton } from '../components/common';
+ * 
+ * 4. Import utility functions:
+ *    import { formatDuration, validateLessonData } from '../components/common';
  */
 
+/**
+ * Default export for backward compatibility
+ * Includes all components and utility functions in alphabetical order
+ */
 export default {
+  // Core components (alphabetically ordered)
+  Accordion,
   Alert,
   AnimatedElement,
   Avatar,
   Badge,
+  BookmarksList,
   Button,
   Card,
+  CardSkeleton,
+  Certificate,
   Container,
   ContentAccessController,
   Dropdown,
@@ -136,16 +313,23 @@ export default {
   ProgressBar,
   Rating,
   ResourceCard,
+  ResumeButton,
   SearchBar,
   Sidebar,
   Skeleton,
   Spinner,
-  TagInput,
-  Tabs,
-  Accordion,
   StepIndicator,
+  Tabs,
+  TagInput,
   TextSkeleton,
-  CardSkeleton,
   Tooltip,
-  Certificate
+  
+  // Utility functions
+  formatDuration,
+  formatPrice,
+  getAccessLevelColor,
+  getAccessLevelDisplay,
+  getInitials,
+  isRestrictedContent,
+  validateLessonData
 };

@@ -1,7 +1,9 @@
 /**
  * File: frontend/src/pages/instructor/CourseWizardContext.jsx
  * Version: 2.1.0
- * Date: 2025-08-01
+ * Date: 2025-05-23 17:26:08
+ * Author: mohithasanthanam
+ * Last Modified: 2025-05-23 17:26:08 UTC
  * 
  * Enhanced Course Wizard Context with Authentication Persistence Integration
  * 
@@ -12,6 +14,7 @@
  * 4. Fixed mutation issues with module and lesson arrays
  * 5. Enhanced ID generation to avoid collisions
  * 6. Improved validation for all wizard steps
+ * 7. CRITICAL FIX: Changed access_level default from 'all' to 'intermediate'
  * 
  * This context manages state for the course wizard across steps:
  * - Course metadata (title, description, etc.)
@@ -23,6 +26,12 @@
  * Variables to modify:
  * - initialState: Default starting state for new courses
  * - ACTIONS: Reducer action types for state modifications
+ * 
+ * Connected files that need to be consistent:
+ * - frontend/src/pages/instructor/CourseWizard.jsx - Main wizard component
+ * - frontend/src/services/instructorService.js - API calls
+ * - backend/instructor_portal/views.py - API endpoints
+ * - backend/instructor_portal/serializers.py - Data validation
  */
 
 import React, { createContext, useContext, useState, useReducer } from 'react';
@@ -330,7 +339,8 @@ export function CourseWizardProvider({ children, existingCourse = null }) {
       title: '',
       content: '',
       order: lessonCount + 1,
-      access_level: 'all', // Default access level
+      // CRITICAL FIX: Changed from 'all' to 'intermediate' to match backend model choices
+      access_level: 'intermediate',
       ...lessonData
     };
     
@@ -427,6 +437,41 @@ export function CourseWizardProvider({ children, existingCourse = null }) {
   
   const clearErrors = () => {
     dispatch({ type: ACTIONS.CLEAR_ERRORS });
+  };
+  
+  // Function to prepare modules for saving by removing temporary IDs
+  const prepareModulesForSaving = (modulesList) => {
+    return modulesList.map(module => {
+      // Create a new module object to avoid mutating state
+      const preparedModule = { ...module };
+      
+      // Remove temporary IDs
+      if (preparedModule.id && typeof preparedModule.id === 'string' && preparedModule.id.startsWith('temp_')) {
+        preparedModule.id = null;
+      }
+      
+      // Process lessons if they exist
+      if (preparedModule.lessons && Array.isArray(preparedModule.lessons)) {
+        preparedModule.lessons = preparedModule.lessons.map(lesson => {
+          const preparedLesson = { ...lesson };
+          
+          // Remove temporary IDs from lessons
+          if (preparedLesson.id && typeof preparedLesson.id === 'string' && preparedLesson.id.startsWith('temp_')) {
+            preparedLesson.id = null;
+          }
+          
+          // CRITICAL FIX: Ensure access_level is set to a valid value
+          // Changed from 'all' to 'intermediate' to match backend model choices
+          if (!preparedLesson.access_level) {
+            preparedLesson.access_level = 'intermediate';
+          }
+          
+          return preparedLesson;
+        });
+      }
+      
+      return preparedModule;
+    });
   };
   
   // Function to validate the current step
@@ -602,6 +647,7 @@ export function CourseWizardProvider({ children, existingCourse = null }) {
     clearErrors,
     validateCurrentStep,
     isStepCompleted,
+    prepareModulesForSaving,
     ACTIONS
   };
 
@@ -621,5 +667,8 @@ export function useCourseWizard() {
   return context;
 }
 
+// Export the context for direct access if needed
 export default CourseWizardContext;
-// END OF CODE
+
+// Export actions for unit testing
+export const WizardActions = ACTIONS;

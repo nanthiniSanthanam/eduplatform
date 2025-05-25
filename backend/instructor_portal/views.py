@@ -1,12 +1,41 @@
-from django.shortcuts import render
+# fmt: off
+# fmt: skip
+# isort: skip
+"""
+File: backend/instructor_portal/views.py
+Version: 2.1.0
+Date: 2025-05-23 17:13:12
+Author: mohithasanthanam
+Last Modified: 2025-05-23 17:13:12 UTC
 
-# Create your views here.
+Enhanced Instructor Portal Views with Multipart Parser Support
 
+Key Improvements:
+1. Added multipart parser support for file uploads (thumbnails)
+2. Enhanced error handling and validation
+3. Improved permission checks for course management
+4. Support for nested module and lesson creation
+5. Comprehensive publishing validation
 
-from rest_framework import viewsets, status, permissions
+This module provides API endpoints for instructors to manage:
+- Courses with file upload support
+- Modules within courses
+- Lessons within modules
+- Resources and assessments
+- Course publishing workflow
+
+Connected files that need to be consistent:
+- backend/instructor_portal/serializers.py - Serializer definitions
+- backend/instructor_portal/urls.py - URL routing
+- frontend/src/services/instructorService.js - API client
+- frontend/src/pages/instructor/CourseWizard.jsx - Course creation UI
+"""
+
+from django.shortcuts import render, get_object_or_404
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework import viewsets, status, permissions, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 
 from courses.models import Course, Module, Lesson, Resource, Assessment, Question, CourseInstructor
 from .serializers import (
@@ -61,8 +90,10 @@ class IsInstructorOrAdmin(permissions.BasePermission):
 
 class InstructorCourseViewSet(viewsets.ModelViewSet):
     """
-    API endpoint for instructors to manage their courses
+    API endpoint for instructors to manage their courses with file upload support
     """
+    # CRITICAL FIX: Add multipart parser support for file uploads
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     serializer_class = InstructorCourseSerializer
     permission_classes = [IsInstructorOrAdmin]
     lookup_field = 'slug'  # Use slug for lookups instead of pk
@@ -85,6 +116,25 @@ class InstructorCourseViewSet(viewsets.ModelViewSet):
             instructor=self.request.user,
             is_lead=True
         )
+
+    def create(self, request, *args, **kwargs):
+        """
+        Enhanced create method to handle course creation without nested modules
+        """
+        # Log the incoming data for debugging
+        print(f"Creating course with data: {request.data}")
+
+        # Don't process modules in initial creation - they should be created separately
+        data = request.data.copy()
+        if 'modules' in data:
+            print(f"Removing modules from initial creation: {data.get('modules')}")
+            del data['modules']
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['get'])
     def modules(self, request, slug=None):
@@ -152,10 +202,7 @@ class InstructorModuleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         course_id = self.request.data.get('course')
         if not course_id:
-            return Response(
-                {"detail": "Course ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise serializers.ValidationError({"detail": "Course ID is required."})
 
         course = get_object_or_404(Course, id=course_id)
 
@@ -163,9 +210,8 @@ class InstructorModuleViewSet(viewsets.ModelViewSet):
         if not course.instructors.filter(instructor=self.request.user).exists() and not (
             self.request.user.role == 'administrator' or self.request.user.is_staff
         ):
-            return Response(
-                {"detail": "You do not have permission to create modules in this course."},
-                status=status.HTTP_403_FORBIDDEN
+            raise permissions.PermissionDenied(
+                "You do not have permission to create modules in this course."
             )
 
         serializer.save(course=course)
@@ -192,10 +238,7 @@ class InstructorLessonViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         module_id = self.request.data.get('module')
         if not module_id:
-            return Response(
-                {"detail": "Module ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise serializers.ValidationError({"detail": "Module ID is required."})
 
         module = get_object_or_404(Module, id=module_id)
 
@@ -203,9 +246,8 @@ class InstructorLessonViewSet(viewsets.ModelViewSet):
         if not module.course.instructors.filter(instructor=self.request.user).exists() and not (
             self.request.user.role == 'administrator' or self.request.user.is_staff
         ):
-            return Response(
-                {"detail": "You do not have permission to create lessons in this module."},
-                status=status.HTTP_403_FORBIDDEN
+            raise permissions.PermissionDenied(
+                "You do not have permission to create lessons in this module."
             )
 
         serializer.save(module=module)
@@ -232,10 +274,7 @@ class InstructorResourceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         lesson_id = self.request.data.get('lesson')
         if not lesson_id:
-            return Response(
-                {"detail": "Lesson ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise serializers.ValidationError({"detail": "Lesson ID is required."})
 
         lesson = get_object_or_404(Lesson, id=lesson_id)
 
@@ -243,9 +282,8 @@ class InstructorResourceViewSet(viewsets.ModelViewSet):
         if not lesson.module.course.instructors.filter(instructor=self.request.user).exists() and not (
             self.request.user.role == 'administrator' or self.request.user.is_staff
         ):
-            return Response(
-                {"detail": "You do not have permission to add resources to this lesson."},
-                status=status.HTTP_403_FORBIDDEN
+            raise permissions.PermissionDenied(
+                "You do not have permission to add resources to this lesson."
             )
 
         serializer.save(lesson=lesson)
@@ -272,10 +310,7 @@ class InstructorAssessmentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         lesson_id = self.request.data.get('lesson')
         if not lesson_id:
-            return Response(
-                {"detail": "Lesson ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise serializers.ValidationError({"detail": "Lesson ID is required."})
 
         lesson = get_object_or_404(Lesson, id=lesson_id)
 
@@ -283,16 +318,14 @@ class InstructorAssessmentViewSet(viewsets.ModelViewSet):
         if not lesson.module.course.instructors.filter(instructor=self.request.user).exists() and not (
             self.request.user.role == 'administrator' or self.request.user.is_staff
         ):
-            return Response(
-                {"detail": "You do not have permission to create assessments for this lesson."},
-                status=status.HTTP_403_FORBIDDEN
+            raise permissions.PermissionDenied(
+                "You do not have permission to create assessments for this lesson."
             )
 
         # Check if lesson already has an assessment
         if hasattr(lesson, 'assessment'):
-            return Response(
-                {"detail": "This lesson already has an assessment."},
-                status=status.HTTP_400_BAD_REQUEST
+            raise serializers.ValidationError(
+                {"detail": "This lesson already has an assessment."}
             )
 
         serializer.save(lesson=lesson)

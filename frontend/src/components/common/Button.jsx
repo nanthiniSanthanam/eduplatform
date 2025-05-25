@@ -1,3 +1,21 @@
+/**
+ * File: frontend/src/components/common/Button.jsx
+ * Version: 2.1.1
+ * Date: 2025-05-24 16:51:32
+ * Author: mohithasanthanam
+ * Last Modified: 2025-05-24 16:51:32 UTC
+ * 
+ * Reusable Button Component with Loading State Support
+ * 
+ * This component is a versatile button with various style variants, sizes,
+ * and support for loading states. It includes a spinner animation when loading.
+ * 
+ * Connected files that need to be consistent:
+ * - frontend/src/pages/instructor/EditCoursePage.jsx (uses Button component)
+ * - frontend/src/pages/instructor/CourseWizard.jsx (uses Button component)
+ * - Other UI components that use the Button component
+ */
+
 import React from 'react';
 import PropTypes from 'prop-types';
 
@@ -13,6 +31,7 @@ const Button = ({
   icon = null,
   iconPosition = 'right',
   isLoading = false,
+  loading, // Added alias support for backward compatibility
   ...props 
 }) => {
   // Base button classes
@@ -47,8 +66,15 @@ const Button = ({
   // Disabled classes
   const disabledClasses = disabled ? 'opacity-60 cursor-not-allowed' : '';
   
+  // Support both isLoading and loading props for backward compatibility
+  const isLoadingState = isLoading || loading;
+  
   // Loading state
-  const loadingClassses = isLoading ? 'relative !text-transparent' : '';
+  const loadingClassses = isLoadingState ? 'relative !text-transparent' : '';
+
+  // Filter out loading prop before passing to DOM
+  const buttonProps = { ...props };
+  delete buttonProps.loading;
 
   return (
     <button
@@ -62,12 +88,12 @@ const Button = ({
         ${loadingClassses}
         ${className}
       `}
-      disabled={disabled || isLoading}
+      disabled={disabled || isLoadingState}
       onClick={onClick}
-      {...props}
+      {...buttonProps}
     >
       {/* Loading spinner */}
-      {isLoading && (
+      {isLoadingState && (
         <div className="absolute inset-0 flex items-center justify-center">
           <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -98,7 +124,8 @@ Button.propTypes = {
   type: PropTypes.oneOf(['button', 'submit', 'reset']),
   icon: PropTypes.node,
   iconPosition: PropTypes.oneOf(['left', 'right']),
-  isLoading: PropTypes.bool
+  isLoading: PropTypes.bool,
+  loading: PropTypes.bool // Added for backward compatibility
 };
 
 export default Button;

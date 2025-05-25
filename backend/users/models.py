@@ -22,6 +22,9 @@ Frontend files needed:
 1. AuthContext.js - React context for authentication state management
 2. PrivateRoute.js - Route protection component
 3. Login.js, Register.js, ResetPassword.js, VerifyEmail.js components
+
+Last modified: 2025-05-21 16:03:09
+Modified by: cadsanthanam
 """
 
 from django.db import models
@@ -381,6 +384,8 @@ class UserSession(models.Model):
     is_active = models.BooleanField(default=True)
     device_type = models.CharField(max_length=50, blank=True)
     location = models.CharField(max_length=100, blank=True)
+    # Added for social auth tracking
+    login_method = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return f"Session for {self.user.email} from {self.ip_address}"
@@ -405,8 +410,6 @@ class UserSession(models.Model):
         self.is_active = False
         self.save(update_fields=['is_active'])
 
-
-# Add to existing models.py file
 
 class Subscription(models.Model):
     """

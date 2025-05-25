@@ -18,6 +18,7 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\instructor_portal
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\logs
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\media
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\scripts
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\static
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\staticfiles
@@ -110,8 +111,6 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\db_settings.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings_dev.py
-C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings_local.py
-C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings_local_prod.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\urls.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\views.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\wsgi.py
@@ -165,6 +164,7 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\managers.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\models.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\permissions.py
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\pipeline.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\serializers.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\tests.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\urls.py
@@ -173,9 +173,11 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__pycache__
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\0001_initial.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\0002_alter_customuser_managers_and_more.py
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\0003_usersession_login_method.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__init__.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__pycache__\0001_initial.cpython-313.pyc
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__pycache__\0002_alter_customuser_managers_and_more.cpython-313.pyc
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__pycache__\0003_usersession_login_method.cpython-313.pyc
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\migrations\__pycache__\__init__.cpython-313.pyc
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\__pycache__\admin.cpython-313.pyc
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\users\__pycache__\apps.cpython-313.pyc
@@ -336,6 +338,7 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\fron
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\auth\LoginPage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\auth\RegisterPage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\auth\ResetPasswordPage.jsx
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\auth\SocialAuthCallback.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\auth\VerifyEmailPage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\certificates\CertificatePage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\courses\AssessmentPage.jsx
@@ -345,6 +348,7 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\fron
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\courses\CreateLessonPage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\courses\CreateModulePage.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\courses\InstructorCourseDetailPage.jsx
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\courses\LearningHeaderWidgets.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\dashboard\components
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\dashboard\AdminDashboard.jsx
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\frontend\src\pages\dashboard\DashboardPage.jsx

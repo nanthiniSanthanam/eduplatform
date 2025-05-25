@@ -12235,3 +12235,301 @@ WARNING 2025-05-15 12:27:52,477 django.server 12368 18140 "GET /api/user/me/?_ca
 WARNING 2025-05-15 12:27:52,493 django.server 12368 14824 "GET /api/user/me/?_cache_buster=1747292271580 HTTP/1.1" 401 58
 WARNING 2025-05-15 18:59:47,972 django.request 16136 11544 Not Found: /api/courses/software-testing/modules/1/
 WARNING 2025-05-15 18:59:47,974 django.server 16136 11544 "GET /api/courses/software-testing/modules/1/ HTTP/1.1" 404 179
+WARNING 2025-05-16 23:00:21,085 django.request 22008 24952 Bad Request: /api/user/login/
+WARNING 2025-05-16 23:00:21,108 django.server 22008 24952 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-16 23:00:39,975 django.request 22008 24952 Bad Request: /api/user/login/
+WARNING 2025-05-16 23:00:39,981 django.server 22008 24952 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-16 23:11:06,768 django.request 22320 17972 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-16 23:11:06,779 django.server 22320 17972 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-16 23:11:06,786 django.request 22320 17972 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-16 23:11:06,787 django.server 22320 17972 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-16 23:13:14,640 django.request 22320 17952 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-16 23:13:14,642 django.server 22320 17952 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-16 23:13:14,648 django.request 22320 17952 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-16 23:13:14,650 django.server 22320 17952 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-16 23:13:14,759 django.request 22320 17952 Unauthorized: /api/token/refresh/
+WARNING 2025-05-16 23:13:14,760 django.server 22320 17952 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-18 20:40:23,818 django.request 24248 18940 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 20:40:23,829 django.server 24248 18940 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 20:40:23,838 django.request 24248 18940 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 20:40:23,839 django.server 24248 18940 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 20:53:31,419 django.request 24248 10416 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 20:53:31,430 django.server 24248 10416 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 20:53:31,444 django.request 24248 10416 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 20:53:31,448 django.server 24248 10416 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 20:53:31,652 django.request 24248 10416 Unauthorized: /api/token/refresh/
+WARNING 2025-05-18 20:53:31,655 django.server 24248 10416 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:36:10,294 django.request 24248 7444 Bad Request: /api/user/login/
+WARNING 2025-05-18 22:36:10,336 django.server 24248 7444 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-18 22:39:32,068 django.request 24248 344 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:39:32,074 django.server 24248 344 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:39:32,086 django.request 24248 344 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:39:32,091 django.server 24248 344 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:41:28,631 django.request 24248 10764 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:41:28,638 django.server 24248 10764 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:41:28,657 django.request 24248 10764 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:41:28,666 django.server 24248 10764 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:41:28,868 django.request 24248 10764 Unauthorized: /api/token/refresh/
+WARNING 2025-05-18 22:41:28,875 django.server 24248 10764 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:43:38,800 django.request 24248 14528 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:43:38,813 django.server 24248 14528 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:43:38,846 django.request 24248 14528 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:43:38,859 django.server 24248 14528 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:45:11,726 django.request 24248 20492 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:45:11,728 django.server 24248 20492 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:45:11,735 django.request 24248 20492 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-18 22:45:11,736 django.server 24248 20492 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:45:11,796 django.request 24248 20492 Unauthorized: /api/token/refresh/
+WARNING 2025-05-18 22:45:11,798 django.server 24248 20492 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-18 22:53:25,752 django.request 24248 1864 Bad Request: /api/user/login/
+WARNING 2025-05-18 22:53:25,759 django.server 24248 1864 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-18 23:18:16,984 django.request 24248 6516 Bad Request: /api/user/login/
+WARNING 2025-05-18 23:18:16,992 django.server 24248 6516 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-20 21:57:51,896 django.request 12632 7744 Bad Request: /api/user/login/
+WARNING 2025-05-20 21:57:51,913 django.server 12632 7744 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-20 21:58:29,281 django.request 12632 1004 Bad Request: /api/user/login/
+WARNING 2025-05-20 21:58:29,283 django.server 12632 1004 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-20 22:06:17,765 django.request 12632 6824 Bad Request: /api/user/login/
+WARNING 2025-05-20 22:06:17,781 django.server 12632 6824 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-20 22:08:10,416 django.request 12632 24404 Bad Request: /api/user/login/
+WARNING 2025-05-20 22:08:10,418 django.server 12632 24404 "POST /api/user/login/ HTTP/1.1" 400 51
+WARNING 2025-05-20 23:16:10,975 django.request 10620 23468 Not Found: /api/users/social/google/
+WARNING 2025-05-20 23:16:11,000 django.server 10620 23468 "GET /api/users/social/google/ HTTP/1.1" 404 51186
+WARNING 2025-05-21 20:42:53,410 django.request 24056 9188 Not Found: /api/users/social/google/complete/
+WARNING 2025-05-21 20:42:53,427 django.request 24056 21172 Not Found: /api/users/social/google/complete/
+WARNING 2025-05-21 20:42:53,434 django.server 24056 9188 "POST /api/users/social/google/complete/ HTTP/1.1" 404 51223
+WARNING 2025-05-21 20:42:53,437 django.server 24056 21172 "POST /api/users/social/google/complete/ HTTP/1.1" 404 51223
+WARNING 2025-05-21 21:28:58,270 django.request 17872 13992 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:28:58,274 django.request 17872 23532 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:28:58,278 django.server 17872 13992 "POST /api/user/social/complete/ HTTP/1.1" 400 98
+WARNING 2025-05-21 21:28:58,281 django.server 17872 23532 "POST /api/user/social/complete/ HTTP/1.1" 400 98
+WARNING 2025-05-21 21:55:46,176 django.request 12956 23352 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:46,184 django.server 12956 23352 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:47,740 django.request 12956 22680 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:47,755 django.request 12956 23352 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:47,760 django.server 12956 22680 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:47,764 django.server 12956 23352 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:49,508 django.request 12956 23352 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:49,526 django.request 12956 22680 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:49,527 django.server 12956 23352 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:49,529 django.server 12956 22680 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:50,517 django.request 12956 18556 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:50,520 django.server 12956 18556 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:55:51,290 django.request 12956 24704 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:55:51,298 django.server 12956 24704 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:56:21,285 django.request 12956 10988 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 21:56:21,294 django.server 12956 10988 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 21:56:21,618 django.request 12956 10988 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 21:56:21,626 django.server 12956 10988 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 21:56:58,087 django.request 12956 7068 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:56:58,099 django.server 12956 7068 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:56:58,937 django.request 12956 8772 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:56:58,942 django.server 12956 8772 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:56:58,984 django.request 12956 8964 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:56:58,989 django.server 12956 8964 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:56:59,410 django.request 12956 17460 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 21:56:59,413 django.server 12956 17460 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 21:58:11,575 django.request 12956 16876 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 21:58:11,583 django.server 12956 16876 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 21:58:11,791 django.request 12956 16876 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 21:58:11,794 django.server 12956 16876 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 22:00:35,135 django.request 12956 7892 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:00:35,206 django.request 12956 14288 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:00:35,219 django.server 12956 7892 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:00:35,253 django.server 12956 14288 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:00:35,300 django.request 12956 11692 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:00:35,316 django.server 12956 11692 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:00:35,838 django.request 12956 22308 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:00:35,841 django.server 12956 22308 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:03:37,951 django.request 12956 23084 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 22:03:37,958 django.server 12956 23084 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 22:03:38,196 django.request 12956 23084 Unauthorized: /api/user/subscription/current/
+WARNING 2025-05-21 22:03:38,202 django.server 12956 23084 "GET /api/user/subscription/current/ HTTP/1.1" 401 58
+WARNING 2025-05-21 22:07:00,795 django.request 12956 7964 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:07:00,798 django.server 12956 7964 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:07:00,900 django.request 12956 5492 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:07:00,902 django.server 12956 5492 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:07:01,112 django.request 12956 3728 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:07:01,114 django.server 12956 3728 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:07:01,813 django.request 12956 4256 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:07:01,817 django.server 12956 4256 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:45,689 django.request 17300 19500 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:45,693 django.server 17300 19500 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:45,946 django.request 17300 3784 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:45,949 django.server 17300 3784 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:45,960 django.request 17300 22608 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:45,964 django.server 17300 22608 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:46,246 django.request 17300 3076 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:46,248 django.server 17300 3076 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:46,617 django.request 17300 19500 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:46,618 django.server 17300 19500 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:46,917 django.request 17300 3784 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:46,918 django.server 17300 3784 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:46,973 django.request 17300 22608 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:46,976 django.server 17300 22608 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 22:08:47,013 django.request 17300 24816 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 22:08:47,015 django.server 17300 24816 "POST /api/user/social/complete/ HTTP/1.1" 400 76
+WARNING 2025-05-21 23:35:21,127 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,135 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,284 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,285 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,398 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,401 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,519 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,524 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,656 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,658 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,713 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,715 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,771 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,773 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,831 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,832 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,885 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,888 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:21,969 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:21,971 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,096 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,107 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,274 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,275 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,347 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,348 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,431 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,433 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,517 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,523 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,689 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,691 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,775 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,776 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:22,888 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:22,890 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,006 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,007 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,100 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,105 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,240 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,241 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,358 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,359 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,508 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,510 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,582 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,583 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,775 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,779 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,885 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,886 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:23,960 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:23,962 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:24,035 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:24,036 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:24,117 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:24,119 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:35:24,179 django.request 10112 11660 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:35:24,181 django.server 10112 11660 "POST /api/user/social/complete/ HTTP/1.1" 400 115
+WARNING 2025-05-21 23:38:53,925 django.request 12928 21536 Bad Request: /api/user/social/complete/
+WARNING 2025-05-21 23:38:53,930 django.server 12928 21536 "POST /api/user/social/complete/ HTTP/1.1" 400 83
+WARNING 2025-05-21 23:40:35,189 django.request 12928 16132 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-21 23:40:35,193 django.server 12928 16132 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-21 23:40:35,322 django.request 12928 16132 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-21 23:40:35,324 django.server 12928 16132 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-21 23:41:09,106 django.request 12928 13816 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-21 23:41:09,115 django.server 12928 13816 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-21 23:41:09,287 django.request 12928 13816 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-21 23:41:09,289 django.server 12928 13816 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:06:01,674 django.request 5872 3960 Bad Request: /api/user/social/complete/
+WARNING 2025-05-22 21:06:01,691 django.server 5872 3960 "POST /api/user/social/complete/ HTTP/1.1" 400 83
+WARNING 2025-05-22 21:07:26,120 django.request 5872 2924 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:07:26,127 django.server 5872 2924 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:07:26,452 django.request 5872 2924 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:07:26,454 django.server 5872 2924 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:15:17,231 django.request 5872 14640 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:15:17,240 django.server 5872 14640 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:15:17,517 django.request 5872 14640 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:15:17,523 django.server 5872 14640 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:16:30,906 django.request 5872 17624 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:16:30,910 django.server 5872 17624 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:16:31,058 django.request 5872 17624 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:16:31,061 django.server 5872 17624 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:52:40,240 django.request 5872 18056 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:52:40,253 django.server 5872 18056 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:52:40,517 django.request 5872 18056 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:52:40,526 django.server 5872 18056 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:53:07,038 django.request 5872 11628 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:53:07,046 django.server 5872 11628 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 21:53:07,139 django.request 5872 11628 Not Found: /api/courses/introduction-to-data-analytics/
+WARNING 2025-05-22 21:53:07,143 django.server 5872 11628 "GET /api/courses/introduction-to-data-analytics/ HTTP/1.1" 404 47
+WARNING 2025-05-22 22:40:08,772 django.request 5872 6780 Unauthorized: /api/enrollments/
+WARNING 2025-05-22 22:40:08,797 django.server 5872 6780 "GET /api/enrollments/ HTTP/1.1" 401 58
+WARNING 2025-05-22 22:40:08,872 django.request 5872 6780 Unauthorized: /api/enrollments/
+WARNING 2025-05-22 22:40:08,881 django.server 5872 6780 "GET /api/enrollments/ HTTP/1.1" 401 58
+WARNING 2025-05-24 20:58:47,832 django.request 19340 8384 Unauthorized: /api/enrollments/
+WARNING 2025-05-24 20:58:47,844 django.server 19340 8384 "GET /api/enrollments/ HTTP/1.1" 401 58
+WARNING 2025-05-24 20:58:47,945 django.request 19340 8384 Unauthorized: /api/enrollments/
+WARNING 2025-05-24 20:58:47,947 django.server 19340 8384 "GET /api/enrollments/ HTTP/1.1" 401 58
+WARNING 2025-05-24 21:45:01,044 django.request 19340 9780 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 21:45:01,064 django.server 19340 9780 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 21:54:11,898 django.request 19340 21068 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 21:54:11,900 django.server 19340 21068 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 22:02:05,136 django.request 19340 12472 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 22:02:05,143 django.server 19340 12472 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 22:06:53,023 django.request 19340 25468 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 22:06:53,026 django.server 19340 25468 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 22:07:40,897 django.request 19340 25468 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 22:07:40,902 django.server 19340 25468 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 22:18:11,309 django.request 19340 3620 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-24 22:18:11,332 django.server 19340 3620 "PUT /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 79
+WARNING 2025-05-24 22:25:34,933 django.request 19340 6992 Unauthorized: /api/user/me/
+WARNING 2025-05-24 22:25:34,937 django.request 19340 10000 Unauthorized: /api/user/me/
+WARNING 2025-05-24 22:25:34,950 django.server 19340 6992 "GET /api/user/me/?_cache_buster=1748105733954 HTTP/1.1" 401 172
+WARNING 2025-05-24 22:25:34,955 django.server 19340 10000 "GET /api/user/me/?_cache_buster=1748105733949 HTTP/1.1" 401 172
+WARNING 2025-05-24 22:25:36,890 django.request 19340 10000 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:25:36,893 django.server 19340 10000 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:25:37,045 django.request 19340 10000 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:25:37,058 django.server 19340 10000 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:25:46,150 django.request 19340 10000 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:25:46,152 django.server 19340 10000 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:25:46,286 django.request 19340 10000 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:25:46,292 django.server 19340 10000 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:26:00,550 django.request 19340 1620 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:26:00,560 django.server 19340 1620 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:26:00,756 django.request 19340 1620 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:26:00,761 django.server 19340 1620 "GET /api/instructor/courses/ HTTP/1.1" 401 172
+WARNING 2025-05-24 22:51:17,955 django.request 19340 16012 Unauthorized: /api/user/me/
+WARNING 2025-05-24 22:51:17,961 django.request 19340 6604 Unauthorized: /api/user/me/
+WARNING 2025-05-24 22:51:17,964 django.server 19340 16012 "GET /api/user/me/?_cache_buster=1748107277077 HTTP/1.1" 401 172
+WARNING 2025-05-24 22:51:17,976 django.server 19340 6604 "GET /api/user/me/?_cache_buster=1748107277074 HTTP/1.1" 401 172
+WARNING 2025-05-24 22:51:18,619 django.request 19340 6604 Unauthorized: /api/token/refresh/
+WARNING 2025-05-24 22:51:18,631 django.server 19340 6604 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-24 22:51:18,906 django.request 19340 6604 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:51:18,908 django.server 19340 6604 "GET /api/instructor/courses/ HTTP/1.1" 401 58
+WARNING 2025-05-24 22:51:18,947 django.request 19340 6604 Unauthorized: /api/instructor/courses/
+WARNING 2025-05-24 22:51:18,948 django.server 19340 6604 "GET /api/instructor/courses/ HTTP/1.1" 401 58
+WARNING 2025-05-25 00:02:03,796 django.request 19340 17108 Unauthorized: /api/user/me/
+WARNING 2025-05-25 00:02:03,810 django.request 19340 2712 Unauthorized: /api/user/me/
+WARNING 2025-05-25 00:02:03,811 django.request 19340 16832 Unauthorized: /api/user/me/
+WARNING 2025-05-25 00:02:03,825 django.request 19340 10820 Unauthorized: /api/courses/featured/
+WARNING 2025-05-25 00:02:03,836 django.request 19340 13152 Unauthorized: /api/testimonials/
+WARNING 2025-05-25 00:02:03,839 django.request 19340 22656 Unauthorized: /api/statistics/platform/
+WARNING 2025-05-25 00:02:03,840 django.server 19340 17108 "GET /api/user/me/?_cache_buster=1748111523258 HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,841 django.server 19340 2712 "GET /api/user/me/?_cache_buster=1748111523387 HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,841 django.server 19340 16832 "GET /api/user/me/?_cache_buster=1748111523242 HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,843 django.server 19340 10820 "GET /api/courses/featured/?limit=3 HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,844 django.server 19340 22656 "GET /api/statistics/platform/ HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,844 django.server 19340 13152 "GET /api/testimonials/ HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,932 django.request 19340 13152 Unauthorized: /api/testimonials/
+WARNING 2025-05-25 00:02:03,940 django.request 19340 10820 Unauthorized: /api/courses/featured/
+WARNING 2025-05-25 00:02:03,947 django.request 19340 22656 Unauthorized: /api/statistics/platform/
+WARNING 2025-05-25 00:02:03,948 django.server 19340 13152 "GET /api/testimonials/ HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,949 django.server 19340 10820 "GET /api/courses/featured/?limit=3 HTTP/1.1" 401 172
+WARNING 2025-05-25 00:02:03,950 django.server 19340 22656 "GET /api/statistics/platform/ HTTP/1.1" 401 172
+WARNING 2025-05-25 10:18:48,009 django.request 20148 18532 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-25 10:18:48,027 django.server 20148 18532 "PATCH /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 105
+WARNING 2025-05-25 10:20:42,220 django.request 20148 23920 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-25 10:20:42,222 django.server 20148 23920 "PATCH /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 105
+WARNING 2025-05-25 10:47:30,382 django.request 20148 2424 Bad Request: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-25 10:47:30,439 django.server 20148 2424 "PATCH /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 400 105
+WARNING 2025-05-25 11:01:02,704 django.request 20148 6264 Unauthorized: /api/instructor/courses/introduction-to-data-analytics/
+WARNING 2025-05-25 11:01:02,712 django.server 20148 6264 "GET /api/instructor/courses/introduction-to-data-analytics/ HTTP/1.1" 401 172

@@ -91,6 +91,9 @@ export const splitToList = (text, delimiter = '\n') => {
   if (!text) return [];
   if (Array.isArray(text)) return text;
   
+  // Only operate on real strings to prevent "text.split is not a function" errors
+  if (typeof text !== 'string') return [];
+  
   return text
     .split(delimiter)
     .map(item => item.trim())
@@ -175,14 +178,9 @@ export const prepareCourseFormData = (formData, thumbnailFile = null) => {
     data.append('is_published', formData.is_published);
   }
   
-  // Array fields
-  const requirements = Array.isArray(formData.requirements) 
-    ? formData.requirements 
-    : splitToList(formData.requirements);
-    
-  const skills = Array.isArray(formData.skills) 
-    ? formData.skills 
-    : splitToList(formData.skills);
+  // Array fields - Now using hardened splitToList that handles any input type safely
+  const requirements = splitToList(formData.requirements);
+  const skills = splitToList(formData.skills);
   
   if (requirements.length > 0) {
     data.append('requirements', JSON.stringify(requirements));

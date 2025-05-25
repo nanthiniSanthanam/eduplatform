@@ -1,7 +1,7 @@
 /**
  * File: frontend/src/App.jsx
- * Version: 2.2.0
- * Date: 2025-05-11 16:41:04
+ * Version: 2.3.0
+ * Date: 2025-05-20 17:14:52
  * Author: cadsanthanam
  * 
  * Enhanced Main Application Component with Improved Content Access Control
@@ -14,12 +14,14 @@
  * 5. Better organization of route groups
  * 6. Consistent role checks for admin/instructor routes
  * 7. Smart content access control for tiered educational content
+ * 8. Social authentication support (Google, GitHub)
  * 
  * This component:
  * 1. Sets up routing for the entire application
  * 2. Defines access control for routes based on authentication and subscription
  * 3. Integrates with AuthContext for user management
  * 4. Implements tiered content access (basic/intermediate/advanced)
+ * 5. Handles social authentication callbacks
  * 
  * Route Access Levels:
  * - Public routes: Accessible to all users (homepage, about, login, register)
@@ -47,6 +49,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import SocialAuthCallback from './pages/auth/SocialAuthCallback';  // Import social auth callback
 
 // Course Pages
 import CourseLandingPage from './pages/courses/CourseLandingPage';
@@ -97,6 +100,9 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          
+          {/* Social Authentication Callback Route */}
+          <Route path="/auth/social/:provider/callback" element={<SocialAuthCallback />} />
           
           {/* Course Landing Pages - Public but with tiered content */}
           <Route path="/courses/:courseSlug" element={<MainLayout><CourseLandingPage /></MainLayout>} />

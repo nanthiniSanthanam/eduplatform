@@ -1,8 +1,9 @@
 /**
  * File: frontend/src/pages/instructor/CourseWizard.jsx
  * Version: 2.1.0
- * Date: 2025-08-01
- * Author: nanthiniSanthanam
+ * Date: 2025-05-23 17:34:53
+ * Author: mohithasanthanam
+ * Last Modified: 2025-05-23 17:34:53 UTC
  * 
  * Enhanced Course Wizard with Authentication Persistence and Improved Course Management
  * 
@@ -13,6 +14,7 @@
  * 4. Improved auto-save functionality with useRef for timer management
  * 5. Better temporary ID handling before saving
  * 6. Fixed memory leaks in auto-save timer
+ * 7. CRITICAL FIX: Changed access_level default from 'all' to 'intermediate'
  * 
  * This component provides a multi-step wizard for course creation with:
  * - 5-step process: Basics → Details → Modules → Content → Review & Publish
@@ -22,6 +24,12 @@
  * 
  * Variables to modify:
  * - AUTO_SAVE_DELAY: Time in ms to wait before auto-saving (default: 3000)
+ * 
+ * Connected files that need to be consistent:
+ * - frontend/src/pages/instructor/CourseWizardContext.jsx - State management
+ * - frontend/src/services/instructorService.js - API calls
+ * - backend/instructor_portal/views.py - API endpoints
+ * - backend/instructor_portal/serializers.py - Data validation
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -72,7 +80,8 @@ const CourseWizardContent = () => {
     isSaving,
     saveStarted,
     saveCompleted,
-    saveFailed
+    saveFailed,
+    prepareModulesForSaving
   } = useCourseWizard();
   
   // Use useRef for timer to properly clean up on unmount and prevent stale closures
@@ -159,40 +168,6 @@ const CourseWizardContent = () => {
     };
   }, []);
   
-  // Prepare modules and lessons by removing temporary IDs
-  const prepareModulesForSaving = (modulesList) => {
-    return modulesList.map(module => {
-      // Create a new module object to avoid mutating state
-      const preparedModule = { ...module };
-      
-      // Remove temporary IDs
-      if (preparedModule.id && typeof preparedModule.id === 'string' && preparedModule.id.startsWith('temp_')) {
-        preparedModule.id = null;
-      }
-      
-      // Process lessons if they exist
-      if (preparedModule.lessons && Array.isArray(preparedModule.lessons)) {
-        preparedModule.lessons = preparedModule.lessons.map(lesson => {
-          const preparedLesson = { ...lesson };
-          
-          // Remove temporary IDs from lessons
-          if (preparedLesson.id && typeof preparedLesson.id === 'string' && preparedLesson.id.startsWith('temp_')) {
-            preparedLesson.id = null;
-          }
-          
-          // Ensure access_level is set
-          if (!preparedLesson.access_level) {
-            preparedLesson.access_level = 'all';
-          }
-          
-          return preparedLesson;
-        });
-      }
-      
-      return preparedModule;
-    });
-  };
-  
   // Save the course data
   const handleSave = async () => {
     // Prevent saving if already in progress
@@ -218,30 +193,46 @@ const CourseWizardContent = () => {
       // Create or update course
       let savedCourse;
       
-      // Prepare modules by removing temporary IDs
-      const preparedModules = prepareModulesForSaving(modules);
-      
-      // Prepare course data with prepared modules
-      const fullCourseData = {
-        ...courseData,
-        modules: preparedModules
-      };
-      
       try {
         console.log("Attempting to save course with data:", {
-          title: fullCourseData.title,
-          category_id: fullCourseData.category_id,
-          modules_count: fullCourseData.modules?.length
+          title: courseData.title,
+          category_id: courseData.category_id,
+          modules_count: modules?.length
         });
         
-        // Use update if course has an ID or slug, otherwise create
-        if (courseData.id || courseData.slug) {
+        // CRITICAL: For new courses, create without modules first
+        if (!courseData.id && !courseData.slug) {
+          // New course - create without modules first
+          const courseDataWithoutModules = { ...courseData };
+          savedCourse = await instructorService.createCourse(courseDataWithoutModules);
+          console.log("New course created successfully");
+          
+          // Then create modules if any exist
+          if (modules && modules.length > 0) {
+            const preparedModules = prepareModulesForSaving(modules);
+            console.log("Creating modules after course creation:", preparedModules);
+            
+            for (const module of preparedModules) {
+              try {
+                await instructorService.createModule({
+                  ...module,
+                  course: savedCourse.id
+                });
+                console.log(`Module created: ${module.title}`);
+              } catch (moduleError) {
+                console.error(`Failed to create module ${module.title}:`, moduleError);
+              }
+            }
+          }
+        } else {
+          // Update existing course
           const identifier = courseData.slug || courseData.id;
+          const fullCourseData = {
+            ...courseData,
+            // Don't include modules in update - they're managed separately
+          };
           savedCourse = await instructorService.updateCourse(identifier, fullCourseData);
           console.log(`Course updated successfully with ${courseData.slug ? 'slug' : 'ID'}: ${identifier}`);
-        } else {
-          savedCourse = await instructorService.createCourse(fullCourseData);
-          console.log("New course created successfully");
         }
         
         // Show success status briefly
@@ -604,4 +595,3 @@ const CourseWizard = () => {
 };
 
 export default CourseWizard;
-// END OF CODE

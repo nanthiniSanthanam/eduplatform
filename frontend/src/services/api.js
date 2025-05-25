@@ -1,3 +1,13 @@
+/**
+ * File: src/services/api.js
+ * Version: 4.0.0
+ * Last modified: 2025-05-21 17:55:30
+ * Author: cadsanthanam
+ * 
+ * Core API service for EduPlatform frontend
+ * Includes enhanced social authentication with PKCE support
+ */
+
 import axios from 'axios';
 import { snakeToCamel, camelToSnake } from '../utils/transformData';
 import secureTokenStorage from '../utils/secureTokenStorage';
@@ -35,6 +45,9 @@ const API_ENDPOINTS = {
     RESET_PASSWORD_REQUEST: `${API_BASE_URL}/user/reset-password-request/`,
     CONFIRM_RESET: `${API_BASE_URL}/user/password/reset/confirm/`,
     CHANGE_PASSWORD: `${API_BASE_URL}/user/password/change/`,
+    // Enhanced social auth endpoints
+    SOCIAL_AUTH: (provider) => `${API_BASE_URL}/user/social/${provider}/`,
+    SOCIAL_AUTH_COMPLETE: () => `${API_BASE_URL}/user/social/complete/`,
   },
   COURSE: {
     BASE: `${API_BASE_URL}/courses/`,
@@ -193,7 +206,7 @@ function sanitizeLogData(data) {
   const sensitiveFields = [
     'password', 'token', 'accessToken', 'refreshToken', 'access', 'refresh',
     'access_token', 'refresh_token', 'authorization', 'email', 'phone',
-    'credit_card', 'cardNumber', 'cvv', 'cvc', 'expiry'
+    'credit_card', 'cardNumber', 'cvv', 'cvc', 'expiry', 'code_verifier'
   ];
   
   sensitiveFields.forEach(field => {
@@ -480,6 +493,12 @@ const authService = {
     localStorage.removeItem('userProfile');
     localStorage.removeItem('subscription');
     
+    // Clean up OAuth-related storage
+    localStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('oauth_code_verifier');
+    sessionStorage.removeItem('oauth_code');
+    sessionStorage.removeItem('oauth_code_expiry');
+    
     if (typeof navigate === 'function') {
       navigate('/login', { replace: true });
     } else {
@@ -529,7 +548,150 @@ const authService = {
   
   isAuthenticated: () => {
     return secureTokenStorage.isTokenValid();
+  },
+  
+  // Enhanced social authentication methods with PKCE and state parameter support
+  getSocialAuthUrl: async (provider, codeChallenge, state) => {
+    try {
+      console.log(`Getting social auth URL for provider: ${provider}`);
+      
+      // Request authorization URL from backend with PKCE and state parameters
+      const response = await apiClient.get(API_ENDPOINTS.AUTH.SOCIAL_AUTH(provider), {
+        params: {
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          state: state,
+          redirect_uri: `${window.location.origin}/auth/social/${provider}/callback`
+        }
+      });
+      
+      // Check for authorizationUrl in both camelCase and snake_case formats
+      if (response.data && (response.data.authorizationUrl || response.data.authorization_url)) {
+        return { 
+          authorizationUrl: response.data.authorizationUrl || response.data.authorization_url,
+          success: true
+        };
+      } else {
+        console.error('Invalid response from social auth URL endpoint:', response);
+        throw new Error('Invalid response format from authorization server');
+      }
+    } catch (error) {
+      console.error(`Failed to get ${provider} auth URL:`, error);
+      
+      // Development fallback for testing when API is not available
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Using development fallback for social auth URL');
+        
+        // Get client IDs from environment variables if available
+        const clientId = provider === 'google' 
+          ? import.meta.env.VITE_GOOGLE_CLIENT_ID || '99067790447-go0pcefo3nt1b9d0udei65u0or6nb0a0.apps.googleusercontent.com'
+          : import.meta.env.VITE_GITHUB_CLIENT_ID || 'your-github-client-id';
+        
+        const redirectUri = encodeURIComponent(`${window.location.origin}/auth/social/${provider}/callback`);
+        const scope = provider === 'google' 
+          ? encodeURIComponent('email profile') 
+          : encodeURIComponent('user:email');
+        
+        // Build auth URL with PKCE and state
+        let authUrl;
+        if (provider === 'google') {
+          authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`;
+        } else {
+          authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+        }
+        
+        // Add PKCE parameters if provided
+        if (codeChallenge) {
+          authUrl += `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+        }
+        
+        // Add state parameter if provided
+        if (state) {
+          authUrl += `&state=${state}`;
+        }
+        
+        return { 
+          authorizationUrl: authUrl,
+          success: true
+        };
+      }
+      
+      throw error;
+    }
+  },
+  
+  // Only modifying the relevant part of api.js
+// Update the processSocialAuth function
+
+processSocialAuth: async (provider, code, codeVerifier) => {
+  try {
+    // Only log part of the code for security
+    if (DEBUG_MODE) {
+      console.log(`Processing ${provider} auth with code length: ${code?.length || 0}`);
+      console.log(`Code verifier provided: ${codeVerifier ? 'Yes' : 'No'}`);
+    }
+    
+    // In development, if using the dev-verifier, adjust request accordingly
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const isUsingDevVerifier = isDevelopment && codeVerifier === 'dev-verifier';
+    
+    // Prepare request body - conditionally include code_verifier
+    const requestBody = { 
+      code,
+      provider,
+      redirect_uri: `${window.location.origin}/auth/social/${provider}/callback`
+    };
+    
+    // Only include code_verifier if it exists and it's not a development fallback
+    // or if we're specifically allowing dev verifier in debug mode
+    if (codeVerifier && (!isUsingDevVerifier || (isUsingDevVerifier && DEBUG_MODE))) {
+      requestBody.code_verifier = codeVerifier;
+    }
+    
+    // Use the correct endpoint
+    const response = await apiClient.post(API_ENDPOINTS.AUTH.SOCIAL_AUTH_COMPLETE(), requestBody);
+    
+    if (!response.data || !response.data.access) {
+      console.error("No token in response", response.data);
+      throw new Error('Invalid response from authentication server');
+    }
+    
+    console.log(`${provider} authentication successful`);
+    
+    secureTokenStorage.setAuthData(
+      response.data.access, 
+      response.data.refresh, 
+      true // Social logins typically remember the user
+    );
+    
+    return response.data;
+  } catch (error) {
+    // Special handling for duplicate calls in development
+    if (process.env.NODE_ENV === 'development' && 
+        error.response?.status === 400 && 
+        error.response?.data?.detail?.includes('code for token')) {
+      console.warn(`Development: ${provider} auth duplicate call detected, suppressing error`);
+      // Return a fake success to keep the UI from showing errors in dev mode
+      // This is only for development to avoid React StrictMode double-invocation errors
+      if (window.localStorage.getItem('isAuthenticated') === 'true') {
+        const cachedUser = JSON.parse(window.localStorage.getItem('currentUser') || '{}');
+        return {
+          access: 'dev-mode-duplicate-call',
+          refresh: 'dev-mode-duplicate-call',
+          user: cachedUser
+        };
+      }
+    }
+    
+    console.error(`${provider} authentication failed:`, error);
+    
+    const errorMsg = error.response?.data?.detail || 
+                   error.response?.data?.message || 
+                   `${provider} login failed. Please try again.`;
+    
+    throw new Error(errorMsg);
   }
+},
 };
 
 const subscriptionService = {
@@ -1501,7 +1663,8 @@ export {
   systemService,
   statisticsService,
   testimonialService,
-  apiUtils
+  apiUtils,
+  apiClient
 };
 
 export default api;

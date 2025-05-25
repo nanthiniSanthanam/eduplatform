@@ -1,8 +1,9 @@
 /**
- * authPersist.js - Authentication persistence utilities
- * Version: 1.0.1
- * Date: 2025-05-07 17:26:32
- * Author: nanthiniSanthanam, cadsanthanam (bugfix)
+ * File: frontend/src/utils/authPersist.js
+ * Version: 1.1.1
+ * Date: 2025-05-25 (merged with backward compatibility)
+ * Author: nanthiniSanthanam, cadsanthanam (bugfix), mohithasanthanam (token format fix)
+ * Last Modified: 2025-05-25 UTC
  * 
  * Comprehensive token management system that solves login persistence issues by:
  * 1. Storing tokens with explicit expiration times
@@ -10,9 +11,23 @@
  * 3. Providing consistent storage/retrieval API for auth data
  * 4. Supporting both session and permanent storage models
  * 
+ * CRITICAL FIXES APPLIED:
+ * 1. EXPORTED missing constants (DEFAULT_EXPIRY_HOURS, INSTRUCTOR_EXPIRY_HOURS)
+ * 2. Added compatibility functions (setAuthData wrapper)
+ * 3. Fixed null safety in isTokenValid function
+ * 4. Added all constants to default export
+ * 5. ADDED backward compatibility alias getToken() -> getValidToken()
+ * 
  * This utility works in conjunction with AuthContext to ensure users remain
  * authenticated across page refreshes and browser sessions, especially important
  * for instructor workflows that may span multiple days.
+ * 
+ * Fixed token expiry format to ensure compatibility with secureTokenStorage.js
+ * 
+ * Connected files:
+ * - frontend/src/utils/secureTokenStorage.js - Also handles token storage
+ * - frontend/src/contexts/AuthContext.jsx - Uses these utilities for auth state
+ * - frontend/src/services/api.js - Uses tokens for request authorization
  * 
  * Variables to modify:
  * - DEFAULT_EXPIRY_HOURS: Change default session length (24 hours)
@@ -26,9 +41,9 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_DATA_KEY = 'userData';
 const USER_ROLE_KEY = 'userRole';
 
-// Default expiry times
-const DEFAULT_EXPIRY_HOURS = 24;
-const INSTRUCTOR_EXPIRY_HOURS = 48;
+// FIXED: Export constants so they can be accessed by AuthContext
+export const DEFAULT_EXPIRY_HOURS = 24;
+export const INSTRUCTOR_EXPIRY_HOURS = 48;
 
 /**
  * Store authentication data with expiration
@@ -48,7 +63,10 @@ export const storeAuthData = (authData, expiryHours = DEFAULT_EXPIRY_HOURS) => {
     
     // Store token with expiration
     localStorage.setItem(TOKEN_KEY, authData.token);
-    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toISOString());
+    
+    // FIXED: Store expiry as milliseconds timestamp (not ISO string)
+    // to match secureTokenStorage.js expectations
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.getTime().toString());
     
     // Store refresh token if available
     if (authData.refreshToken) {
@@ -78,18 +96,25 @@ export const storeAuthData = (authData, expiryHours = DEFAULT_EXPIRY_HOURS) => {
 export const isTokenValid = () => {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
-    const expiryString = localStorage.getItem(TOKEN_EXPIRY_KEY); // FIXED: Changed setItem to getItem
+    const expiryString = localStorage.getItem(TOKEN_EXPIRY_KEY);
     
     // No token or expiry means token is invalid
     if (!token || !expiryString) {
       return false;
     }
     
-    // Check if token is expired
-    const expiry = new Date(expiryString);
-    const now = new Date();
+    // FIXED: Handle both formats for future compatibility + null safety
+    let expiryMs;
+    if (expiryString && expiryString.includes('-')) {
+      // Handle ISO date string format
+      expiryMs = new Date(expiryString).getTime();
+    } else {
+      // Handle millisecond timestamp format
+      expiryMs = parseInt(expiryString, 10);
+    }
     
-    return now < expiry && !!token;
+    // Check if token is expired
+    return Date.now() < expiryMs && !!token;
   } catch (error) {
     console.error('Error checking token validity:', error);
     return false;
@@ -147,7 +172,9 @@ export const refreshTokenExpiry = (expiryHours = DEFAULT_EXPIRY_HOURS) => {
   
   const expiryTime = new Date();
   expiryTime.setHours(expiryTime.getHours() + expiryHours);
-  localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toISOString());
+  
+  // FIXED: Store expiry as milliseconds timestamp
+  localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.getTime().toString());
   
   console.log(`Token expiry extended to: ${expiryTime}`);
 };
@@ -214,6 +241,7 @@ export const getSessionDuration = (userData) => {
 };
 
 /**
+ * FIXED: Added compatibility function for secureTokenStorage API
  * Set authentication data from JWT tokens
  * @param {string} accessToken - JWT access token
  * @param {string} refreshToken - JWT refresh token
@@ -236,7 +264,9 @@ export const setAuthData = (accessToken, refreshToken, rememberMe = false) => {
     // Set token expiry (default 24 hours from now)
     const expiryTime = new Date();
     expiryTime.setHours(expiryTime.getHours() + DEFAULT_EXPIRY_HOURS);
-    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toISOString());
+    
+    // FIXED: Store expiry as milliseconds timestamp
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.getTime().toString());
     
     console.log(`Auth data stored successfully. Expires: ${expiryTime}`);
   } catch (error) {
@@ -244,6 +274,15 @@ export const setAuthData = (accessToken, refreshToken, rememberMe = false) => {
   }
 };
 
+// ──────── BACKWARD COMPATIBILITY ALIAS ────────
+/**
+ * Legacy alias for getValidToken() - kept for backward compatibility
+ * @deprecated Use getValidToken() instead
+ * @returns {string|null} - The token if valid, null otherwise
+ */
+export const getToken = () => getValidToken();
+
+// FIXED: Added default export with ALL required functions and constants
 export default {
   storeAuthData,
   isTokenValid,
@@ -257,5 +296,10 @@ export default {
   getRefreshToken,
   shouldHaveExtendedSession,
   getSessionDuration,
-  setAuthData  // Added to support the API.js implementation
+  setAuthData,
+  // FIXED: Added backward compatibility alias to default export
+  getToken,
+  // FIXED: Added missing constants to default export
+  DEFAULT_EXPIRY_HOURS,
+  INSTRUCTOR_EXPIRY_HOURS
 };
