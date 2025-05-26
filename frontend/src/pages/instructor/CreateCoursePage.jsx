@@ -1,10 +1,11 @@
 /**
  * File: frontend/src/pages/instructor/CreateCoursePage.jsx
- * Version: 2.1.0
- * Date: 2025-08-01
- * Author: nanthiniSanthanam
+ * Version: 2.1.5
+ * Date: 2025-05-25 17:51:46
+ * Author: nanthiniSanthanam, mohithasanthanam
+ * Last Modified: 2025-05-25 17:51:46 UTC
  * 
- * Enhanced Course Creation Page with Authentication Persistence
+ * Enhanced Course Creation Page with Title Uniqueness Checking
  * 
  * Key Improvements:
  * 1. Integration with authPersist for reliable authentication
@@ -12,12 +13,17 @@
  * 3. Better form validation with immediate feedback
  * 4. Improved category handling
  * 5. Added slug-based redirect after course creation
- * 6. Proper FormData handling for file uploads
+ * 6. Changed from FormData to plain object for course creation
  * 7. Improved thumbnail preview functionality
+ * 8. Added editor mode switching functionality
+ * 9. Fixed redirection to module creation instead of editor
+ * 10. Added course title uniqueness checking
+ * 11. Added suggestions for handling duplicate course titles
+ * 12. Fixed modal UI for better accessibility
+ * 13. Added more informative user feedback during title checking
  * 
  * This component provides a simplified form for instructors to create new courses.
- * After initial creation, users are redirected to the course detail page or wizard
- * for further editing.
+ * After initial creation, users are redirected to module creation for a smoother workflow.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -35,6 +41,7 @@ import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import LoadingScreen from '../../components/common/LoadingScreen';
 import MainLayout from '../../components/layouts/MainLayout';
+import Modal from '../../components/common/Modal'; // Assuming you have a Modal component
 
 const CreateCoursePage = () => {
   const { currentUser } = useAuth();
@@ -60,6 +67,11 @@ const CreateCoursePage = () => {
   const [formErrors, setFormErrors] = useState({});
   const [success, setSuccess] = useState(false);
   
+  // Duplicate title handling
+  const [showDuplicateTitleModal, setShowDuplicateTitleModal] = useState(false);
+  const [suggestedTitle, setSuggestedTitle] = useState('');
+  const [isCheckingTitle, setIsCheckingTitle] = useState(false);
+  
   // Fetch categories on component mount
   useEffect(() => {
     async function fetchCategories() {
@@ -84,6 +96,9 @@ const CreateCoursePage = () => {
     }
     
     fetchCategories();
+    
+    // Store that we're using traditional editor mode
+    localStorage.setItem('editorMode', 'traditional');
   }, []);
 
   // Handle input change
@@ -157,42 +172,28 @@ const CreateCoursePage = () => {
       setLoading(true);
       setError(null);
       
-      // Create FormData for multipart submission
-      const formDataObj = new FormData();
+      // Show checking title status
+      setIsCheckingTitle(true);
       
-      // Add all scalar fields
-      Object.entries(formData).forEach(([key, value]) => {
-        // Handle empty price specifically
-        if (key === 'price') {
-          formDataObj.append(key, value === '' ? '0' : value);
-        } else {
-          formDataObj.append(key, value);
-        }
-      });
+      // Check if course title already exists using our new method from instructorService
+      const titleExists = await instructorService.checkCourseTitleExists(formData.title.trim());
+      setIsCheckingTitle(false);
       
-      // Add thumbnail file if present
-      if (thumbnail) {
-        formDataObj.append('thumbnail', thumbnail);
+      if (titleExists) {
+        // Generate suggested title with instructor's name
+        const instructorName = currentUser?.name || currentUser?.username || 'You';
+        const suggestedTitle = `${formData.title.trim()} by ${instructorName}`;
+        setSuggestedTitle(suggestedTitle);
+        
+        // Show duplicate title modal
+        setShowDuplicateTitleModal(true);
+        setLoading(false);
+        return;
       }
       
-      // Create course with FormData
-      const createdCourse = await instructorService.createCourse(formDataObj);
+      // If title doesn't exist, proceed with course creation
+      await createCourse(formData.title.trim());
       
-      setSuccess(true);
-      
-      // Navigate to course detail/edit page
-      setTimeout(() => {
-        if (createdCourse && createdCourse.slug) {
-          // Navigate to course wizard for continued editing
-          navigate(`/instructor/courses/wizard/${createdCourse.slug}`);
-        } else if (createdCourse && createdCourse.id) {
-          // Fallback to ID-based navigation if slug isn't available
-          navigate(`/instructor/courses/${createdCourse.id}/edit`);
-        } else {
-          // If no ID or slug, go to instructor dashboard
-          navigate('/instructor/dashboard');
-        }
-      }, 1500);
     } catch (err) {
       console.error('Error creating course:', err);
       
@@ -218,9 +219,93 @@ const CreateCoursePage = () => {
       }
       
       setError(errorMessage);
+      setLoading(false);
+    }
+  };
+  
+  // Create course with specified title
+  const createCourse = async (title) => {
+    try {
+      setLoading(true);
+      
+      // Create course with plain object, now using the updated instructorService
+      // that doesn't add timestamps automatically
+      const createdCourse = await instructorService.createCourse({
+        title: title,
+        description: formData.description.trim(),
+        category_id: formData.category_id,
+        level: formData.level,
+        price: formData.price === '' ? 0 : parseFloat(formData.price),
+        has_certificate: formData.has_certificate,
+        thumbnail: thumbnail // File or null
+      });
+      
+      setSuccess(true);
+      
+      // Store course ID and slug for potential recovery
+      if (createdCourse && createdCourse.id) {
+        localStorage.setItem('lastEditedCourseId', createdCourse.id);
+      }
+      
+      if (createdCourse && createdCourse.slug) {
+        localStorage.setItem('lastEditedCourseSlug', createdCourse.slug);
+      }
+      
+      // Navigate to module creation
+      setTimeout(() => {
+        if (createdCourse && createdCourse.slug) {
+          navigate(`/instructor/courses/${createdCourse.slug}/modules/new`);
+        } else if (createdCourse && createdCourse.id) {
+          navigate(`/instructor/courses/${createdCourse.id}/modules/new`);
+        } else {
+          navigate('/instructor/dashboard');
+        }
+      }, 1500);
+    } catch (err) {
+      console.error('Error creating course:', err);
+      
+      // Extract detailed error message if available
+      let errorMessage = 'Failed to create course.';
+      
+      if (err.details) {
+        if (typeof err.details === 'object') {
+          const errorDetails = Object.entries(err.details).map(([key, value]) => {
+            const errorText = Array.isArray(value) ? value.join(', ') : value;
+            return `${key}: ${errorText}`;
+          });
+          
+          if (errorDetails.length > 0) {
+            errorMessage = errorDetails.join('\n');
+          }
+        } else if (typeof err.details === 'string') {
+          errorMessage = err.details;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Handle duplicate title modal actions
+  const handleUseSuggestedTitle = () => {
+    setShowDuplicateTitleModal(false);
+    createCourse(suggestedTitle);
+  };
+  
+  const handleUseCustomTitle = () => {
+    setShowDuplicateTitleModal(false);
+    // Focus the title input field for better UX
+    setTimeout(() => {
+      document.getElementById('course-title')?.focus();
+    }, 100);
+  };
+
+  const handleCloseModal = () => {
+    setShowDuplicateTitleModal(false);
   };
   
   // If fetching initial data
@@ -245,6 +330,22 @@ const CreateCoursePage = () => {
             </p>
           </div>
           
+          {/* Editor mode switch button */}
+          <div className="flex justify-end mb-4">
+            <Button 
+              color="primary"
+              variant="outlined"
+              onClick={() => {
+                if (window.confirm("Switch to wizard mode? Any unsaved changes will be lost.")) {
+                  localStorage.setItem('editorMode', 'wizard');
+                  navigate('/instructor/courses/new');
+                }
+              }}
+            >
+              Switch to Wizard Mode
+            </Button>
+          </div>
+          
           {error && (
             <Alert type="error" className="mb-4">
               {error}
@@ -253,7 +354,7 @@ const CreateCoursePage = () => {
           
           {success && (
             <Alert type="success" className="mb-4">
-              Course created successfully! Redirecting to course editor...
+              Course created successfully! Redirecting to module creation...
             </Alert>
           )}
           
@@ -397,7 +498,7 @@ const CreateCoursePage = () => {
                   variant="outlined" 
                   color="secondary" 
                   onClick={() => navigate('/instructor/dashboard')}
-                  disabled={loading}
+                  disabled={loading || isCheckingTitle}
                 >
                   Cancel
                 </Button>
@@ -405,13 +506,65 @@ const CreateCoursePage = () => {
                   type="submit" 
                   variant="contained" 
                   color="primary" 
-                  loading={loading}
+                  loading={loading || isCheckingTitle}
                 >
-                  {loading ? 'Creating...' : 'Create Course'}
+                  {loading ? 'Creating...' : isCheckingTitle ? 'Checking title...' : 'Create Course'}
                 </Button>
               </div>
             </form>
           </Card>
+          
+          {/* Improved Duplicate Title Modal with better accessibility */}
+          {showDuplicateTitleModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div 
+                className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full"
+                role="dialog"
+                aria-labelledby="duplicate-title-modal"
+                aria-modal="true"
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h2 id="duplicate-title-modal" className="text-xl font-bold text-red-600">
+                    Duplicate Course Title
+                  </h2>
+                  <button 
+                    onClick={handleCloseModal}
+                    className="text-gray-500 hover:text-gray-700"
+                    aria-label="Close modal"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className="mb-6">
+                  <p className="mb-2">
+                    A course with the title "<strong>{formData.title}</strong>" already exists.
+                  </p>
+                  <p>
+                    Please choose one of the following options:
+                  </p>
+                </div>
+                
+                <div className="space-y-4">
+                  <button 
+                    onClick={handleUseSuggestedTitle}
+                    className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors duration-200"
+                  >
+                    Use suggested title: "<strong>{suggestedTitle}</strong>"
+                  </button>
+                  <button
+                    onClick={handleUseCustomTitle}
+                    className="w-full py-2 px-4 border border-gray-300 hover:bg-gray-100 font-medium rounded transition-colors duration-200"
+                  >
+                    Enter a different title
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
         </Container>
       </div>
     </MainLayout>
@@ -419,4 +572,3 @@ const CreateCoursePage = () => {
 };
 
 export default CreateCoursePage;
-// END OF CODE

@@ -4,6 +4,7 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\instructor_portal
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\logs
+C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\media
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\scripts
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\static
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\staticfiles
@@ -95,7 +96,6 @@ C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\back
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\asgi.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\db_settings.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings.py
-C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\settings_dev.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\urls.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\views.py
 C:\Users\Santhanam\OneDrive\Personal\Full stack web development\eduplatform\backend\educore\wsgi.py

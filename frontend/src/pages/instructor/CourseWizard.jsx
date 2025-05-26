@@ -1,9 +1,9 @@
 /**
  * File: frontend/src/pages/instructor/CourseWizard.jsx
- * Version: 2.1.0
- * Date: 2025-05-23 17:34:53
+ * Version: 2.1.1
+ * Date: 2025-05-25 15:47:10
  * Author: mohithasanthanam
- * Last Modified: 2025-05-23 17:34:53 UTC
+ * Last Modified: 2025-05-25 15:47:10 UTC
  * 
  * Enhanced Course Wizard with Authentication Persistence and Improved Course Management
  * 
@@ -15,6 +15,10 @@
  * 5. Better temporary ID handling before saving
  * 6. Fixed memory leaks in auto-save timer
  * 7. CRITICAL FIX: Changed access_level default from 'all' to 'intermediate'
+ * 8. Added session recovery mechanism
+ * 9. Improved module and lesson saving with better error handling
+ * 10. Added editor mode switching capability
+ * 11. Added localStorage persistence for better user experience
  * 
  * This component provides a multi-step wizard for course creation with:
  * - 5-step process: Basics → Details → Modules → Content → Review & Publish
@@ -168,7 +172,32 @@ const CourseWizardContent = () => {
     };
   }, []);
   
-  // Save the course data
+  // ADDED: Session recovery mechanism
+  useEffect(() => {
+    // Check if we have a course slug/id from URL
+    if (!courseData.id && !courseData.slug) {
+      // If not, check localStorage for last edited course
+      const lastEditedId = localStorage.getItem('lastEditedCourseId');
+      const lastEditedSlug = localStorage.getItem('lastEditedCourseSlug');
+      
+      if (lastEditedSlug) {
+        // Ask user if they want to resume editing
+        const shouldRestore = window.confirm(
+          "It looks like you were editing a course. Would you like to resume where you left off?"
+        );
+        
+        if (shouldRestore) {
+          navigate(`/instructor/courses/wizard/${lastEditedSlug}`);
+        } else {
+          // Clear the stored data if user doesn't want to resume
+          localStorage.removeItem('lastEditedCourseId');
+          localStorage.removeItem('lastEditedCourseSlug');
+        }
+      }
+    }
+  }, [courseData.id, courseData.slug, navigate]);
+  
+  // MODIFIED: Save the course data with improved module and lesson handling
   const handleSave = async () => {
     // Prevent saving if already in progress
     if (isSaving) {
@@ -200,29 +229,55 @@ const CourseWizardContent = () => {
           modules_count: modules?.length
         });
         
-        // CRITICAL: For new courses, create without modules first
+        // ADDED: Store current editing mode in localStorage
+        localStorage.setItem('editorMode', 'wizard');
+        
+        // For new courses, create without modules first
         if (!courseData.id && !courseData.slug) {
           // New course - create without modules first
           const courseDataWithoutModules = { ...courseData };
           savedCourse = await instructorService.createCourse(courseDataWithoutModules);
-          console.log("New course created successfully");
+          console.log("New course created successfully", savedCourse);
+          
+          // ADDED: Save course ID and slug to localStorage for recovery
+          localStorage.setItem('lastEditedCourseId', savedCourse.id);
+          localStorage.setItem('lastEditedCourseSlug', savedCourse.slug);
           
           // Then create modules if any exist
           if (modules && modules.length > 0) {
             const preparedModules = prepareModulesForSaving(modules);
             console.log("Creating modules after course creation:", preparedModules);
             
-            for (const module of preparedModules) {
-              try {
-                await instructorService.createModule({
-                  ...module,
-                  course: savedCourse.id
-                });
-                console.log(`Module created: ${module.title}`);
-              } catch (moduleError) {
+            // MODIFIED: Use Promise.all to wait for all module creations
+            const modulePromises = preparedModules.map(module => 
+              instructorService.createModule({
+                ...module,
+                course: savedCourse.id
+              }).then(createdModule => {
+                console.log(`Module created: ${module.title}`, createdModule);
+                
+                // ADDED: If module has lessons, create them too
+                if (module.lessons && module.lessons.length > 0) {
+                  const lessonPromises = module.lessons.map(lesson => 
+                    instructorService.createLesson({
+                      ...lesson,
+                      module: createdModule.id
+                    }).catch(lessonError => {
+                      console.error(`Failed to create lesson ${lesson.title}:`, lessonError);
+                      return null;
+                    })
+                  );
+                  
+                  return Promise.all(lessonPromises);
+                }
+                return createdModule;
+              }).catch(moduleError => {
                 console.error(`Failed to create module ${module.title}:`, moduleError);
-              }
-            }
+                return null;
+              })
+            );
+            
+            await Promise.all(modulePromises);
           }
         } else {
           // Update existing course
@@ -233,6 +288,66 @@ const CourseWizardContent = () => {
           };
           savedCourse = await instructorService.updateCourse(identifier, fullCourseData);
           console.log(`Course updated successfully with ${courseData.slug ? 'slug' : 'ID'}: ${identifier}`);
+          
+          // ADDED: Save course ID and slug to localStorage for recovery
+          localStorage.setItem('lastEditedCourseId', savedCourse.id);
+          localStorage.setItem('lastEditedCourseSlug', savedCourse.slug);
+          
+          // MODIFIED: Update existing modules and create new ones
+          if (modules && modules.length > 0) {
+            for (const module of modules) {
+              try {
+                let savedModule;
+                
+                // If module has a non-temporary ID, update it
+                if (module.id && !String(module.id).startsWith('temp_')) {
+                  savedModule = await instructorService.updateModule(module.id, {
+                    ...module,
+                    course: savedCourse.id
+                  });
+                  console.log(`Module updated: ${module.title}`);
+                } else {
+                  // Otherwise create a new module
+                  savedModule = await instructorService.createModule({
+                    ...module,
+                    id: undefined, // Remove temporary ID
+                    course: savedCourse.id
+                  });
+                  console.log(`Module created: ${module.title}`);
+                }
+                
+                // Process lessons for this module
+                if (module.lessons && module.lessons.length > 0) {
+                  for (const lesson of module.lessons) {
+                    try {
+                      // If lesson has a non-temporary ID, update it
+                      if (lesson.id && !String(lesson.id).startsWith('temp_')) {
+                        await instructorService.updateLesson(lesson.id, {
+                          ...lesson,
+                          module: savedModule.id
+                        });
+                        console.log(`Lesson updated: ${lesson.title}`);
+                      } else {
+                        // Otherwise create a new lesson
+                        await instructorService.createLesson({
+                          ...lesson,
+                          id: undefined, // Remove temporary ID
+                          module: savedModule.id
+                        });
+                        console.log(`Lesson created: ${lesson.title}`);
+                      }
+                    } catch (lessonError) {
+                      console.error(`Failed to save lesson ${lesson.title}:`, lessonError);
+                      // Continue with next lesson instead of failing the whole save
+                    }
+                  }
+                }
+              } catch (moduleError) {
+                console.error(`Failed to save module ${module.title}:`, moduleError);
+                // Continue with next module instead of failing the whole save
+              }
+            }
+          }
         }
         
         // Show success status briefly
@@ -290,6 +405,16 @@ const CourseWizardContent = () => {
         });
         
         saveFailed(errorMessage);
+        
+        // ADDED: Implement retry mechanism for save failures
+        if (!error.status || error.status < 400 || error.status >= 500) {
+          // Only retry for server errors or network issues
+          console.log("Will retry save in 5 seconds...");
+          setTimeout(() => {
+            console.log("Retrying save operation...");
+            handleSave();
+          }, 5000);
+        }
       }
     } catch (error) {
       console.error("Unexpected error during save:", error);
@@ -407,6 +532,33 @@ const CourseWizardContent = () => {
           </button>
         </Alert>
       )}
+      
+      {/* ADDED: Editor mode switching button */}
+      <div className="flex justify-end mb-4">
+        <Button 
+          color="primary"
+          variant="outlined"
+          onClick={() => {
+            if (window.confirm("Switch to traditional editor? Your progress will be saved.")) {
+              // Save current progress first
+              handleSave();
+              
+              localStorage.setItem('editorMode', 'traditional');
+              
+              // Navigate to traditional editor
+              if (courseData.slug) {
+                navigate(`/instructor/courses/${courseData.slug}/edit`);
+              } else if (courseData.id) {
+                navigate(`/instructor/courses/${courseData.id}/edit`);
+              } else {
+                navigate('/instructor/courses/traditional/new');
+              }
+            }
+          }}
+        >
+          Switch to Traditional Editor
+        </Button>
+      </div>
       
       {/* Step indicator */}
       <div className="mb-6">

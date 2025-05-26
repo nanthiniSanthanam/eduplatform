@@ -1,0 +1,87 @@
+WARNING 2025-05-25 20:26:46,858 django.request 16624 17044 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 20:26:46,882 django.server 16624 17044 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 20:26:47,259 django.request 16624 17044 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 20:26:47,265 django.server 16624 17044 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 20:26:47,355 django.request 16624 17044 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 20:26:47,407 django.server 16624 17044 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 20:26:47,563 django.request 16624 24320 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 20:26:47,567 django.server 16624 24320 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 20:34:42,762 django.request 16624 17996 Bad Request: /api/instructor/courses/eg-20250525_150110/publish/
+WARNING 2025-05-25 20:34:42,775 django.server 16624 17996 "PUT /api/instructor/courses/eg-20250525_150110/publish/ HTTP/1.1" 400 62
+WARNING 2025-05-25 21:27:25,713 django.request 16624 12016 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 21:27:25,747 django.server 16624 12016 "PATCH /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 21:27:26,204 django.request 16624 12016 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 21:27:26,215 django.server 16624 12016 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 21:27:26,331 django.request 16624 12016 Unauthorized: /api/instructor/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 21:27:26,332 django.server 16624 12016 "GET /api/instructor/courses/engineering-graphics-20250525_134427/ HTTP/1.1" 401 172
+WARNING 2025-05-25 21:27:26,671 django.request 16624 16196 Unauthorized: /api/token/refresh/
+WARNING 2025-05-25 21:27:26,673 django.server 16624 16196 "POST /api/token/refresh/ HTTP/1.1" 401 58
+WARNING 2025-05-25 21:27:26,906 django.request 16624 16196 Not Found: /api/courses/engineering-graphics-20250525_134427/
+WARNING 2025-05-25 21:57:26,632 django.request 16624 19656 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:57:26,635 django.server 16624 19656 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:57:42,127 django.request 16624 19656 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:57:42,128 django.server 16624 19656 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:57:42,162 django.request 16624 19656 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:57:42,163 django.server 16624 19656 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:03,114 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:03,115 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:03,141 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:03,142 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:03,209 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:03,210 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:07,384 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:07,387 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:07,421 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:07,421 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:07,473 django.request 16624 5556 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:07,475 django.server 16624 5556 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:31,694 django.request 16624 1744 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:31,695 django.server 16624 1744 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:31,729 django.request 16624 1744 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:31,730 django.server 16624 1744 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:31,787 django.request 16624 1744 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:31,787 django.server 16624 1744 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:41,432 django.request 16624 7996 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:41,433 django.server 16624 7996 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:41,453 django.request 16624 7996 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:41,454 django.server 16624 7996 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:41,506 django.request 16624 7996 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:41,507 django.server 16624 7996 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:55,381 django.request 16624 24740 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:55,381 django.server 16624 24740 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:55,409 django.request 16624 24740 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:55,409 django.server 16624 24740 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:58:55,484 django.request 16624 24740 Bad Request: /api/instructor/lessons/
+WARNING 2025-05-25 21:58:55,485 django.server 16624 24740 "POST /api/instructor/lessons/ HTTP/1.1" 400 44
+WARNING 2025-05-25 21:59:13,586 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:13,588 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:16,987 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:16,988 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:20,154 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:20,155 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:23,265 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:23,266 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:26,313 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:26,314 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:29,396 django.request 16624 21964 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:29,397 django.server 16624 21964 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:33,069 django.request 16624 8568 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:33,070 django.server 16624 8568 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:36,382 django.request 16624 8568 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:36,382 django.server 16624 8568 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:39,684 django.request 16624 8568 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:39,686 django.server 16624 8568 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:43,354 django.request 16624 12404 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:43,356 django.server 16624 12404 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:46,661 django.request 16624 12404 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:46,662 django.server 16624 12404 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:50,009 django.request 16624 12404 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:50,011 django.server 16624 12404 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:53,671 django.request 16624 6296 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:53,672 django.server 16624 6296 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 21:59:56,939 django.request 16624 6296 Bad Request: /api/instructor/courses/eg-20250525_150110/
+WARNING 2025-05-25 21:59:56,939 django.server 16624 6296 "PATCH /api/instructor/courses/eg-20250525_150110/ HTTP/1.1" 400 89
+WARNING 2025-05-25 22:28:10,404 django.request 16624 13216 Unauthorized: /api/categories/
+WARNING 2025-05-25 22:28:10,420 django.server 16624 13216 "GET /api/categories/ HTTP/1.1" 401 172
+WARNING 2025-05-25 22:28:10,610 django.request 16624 13216 Unauthorized: /api/categories/
+WARNING 2025-05-25 22:28:10,611 django.server 16624 13216 "GET /api/categories/ HTTP/1.1" 401 172

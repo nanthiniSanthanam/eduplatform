@@ -1,14 +1,15 @@
 /**
  * File: frontend/src/pages/instructor/InstructorDashboard.jsx
- * Version: 2.1.3
- * Date: 2025-05-25 12:30:00
+ * Version: 2.1.4
+ * Date: 2025-05-25 15:53:02
  * Author: mohithasanthanam
- * Last Modified: 2025-05-25 12:30:00 UTC
+ * Last Modified: 2025-05-25 15:53:02 UTC
  * 
- * Instructor Dashboard with Authentication Handling
+ * Instructor Dashboard with Authentication Handling and Enhanced Course Creation Options
  * 
  * This component provides an instructor dashboard with key metrics and course management.
- * It includes improved authentication handling and redirects to login when needed.
+ * It includes improved authentication handling, redirects to login when needed,
+ * and enhanced course creation/editing options with both traditional and wizard modes.
  * 
  * Key Improvements:
  * 1. Proper authentication checking before API calls
@@ -21,6 +22,9 @@
  * 8. Fixed courses data handling for v2.7.0 API response format
  * 9. Added auth state guard to prevent race conditions
  * 10. Improved statistics mapping for consistent field names
+ * 11. Added dual course creation options (wizard/traditional)
+ * 12. Enhanced course editing with mode selection options
+ * 13. Added editor mode persistence in localStorage
  * 
  * Connected files that need to be consistent:
  * - frontend/src/services/instructorService.js (provides data for dashboard)
@@ -30,6 +34,8 @@
  * - frontend/src/components/common/LoadingScreen.jsx (loading indicator)
  * - frontend/src/components/common/Alert.jsx (error/info messages)
  * - frontend/src/components/common/Button.jsx (buttons with loading state)
+ * - frontend/src/pages/instructor/CourseWizard.jsx (wizard mode course creation)
+ * - frontend/src/pages/instructor/CreateCoursePage.jsx (traditional course creation)
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -201,6 +207,18 @@ const InstructorDashboard = () => {
     }
   }, [isAuthenticated, isInstructor, navigate]);
   
+  // ADDED: Function to handle new course creation with editor preference
+  const handleCreateNewCourse = () => {
+    // Check if user has a preferred editor mode
+    const preferredMode = localStorage.getItem('editorMode') || 'wizard';
+    
+    if (preferredMode === 'wizard') {
+      navigate('/instructor/courses/new');
+    } else {
+      navigate('/instructor/courses/traditional/new');
+    }
+  };
+  
   // Handle course deletion
   const handleDeleteCourse = async (courseSlug) => {
     if (!window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
@@ -236,9 +254,27 @@ const InstructorDashboard = () => {
         <div className="flex flex-col md:flex-row justify-between items-center mb-8">
           <h1 className="text-3xl font-bold mb-4 md:mb-0">Instructor Dashboard</h1>
           
-          <Link to="/instructor/courses/new">
-            <Button variant="primary">Create New Course</Button>
-          </Link>
+          {/* MODIFIED: Replaced single button with two options */}
+          <div className="flex space-x-2">
+            <Button 
+              variant="primary" 
+              onClick={() => {
+                localStorage.setItem('editorMode', 'wizard');
+                navigate('/instructor/courses/new');
+              }}
+            >
+              Create with Wizard
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                localStorage.setItem('editorMode', 'traditional');
+                navigate('/instructor/courses/traditional/new');
+              }}
+            >
+              Create Traditionally
+            </Button>
+          </div>
         </div>
         
         {error && (
@@ -288,9 +324,27 @@ const InstructorDashboard = () => {
           {courses.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500 mb-4">You haven't created any courses yet.</p>
-              <Link to="/instructor/courses/new">
-                <Button variant="primary">Create Your First Course</Button>
-              </Link>
+              {/* MODIFIED: Use dual creation options */}
+              <div className="flex justify-center space-x-3">
+                <Button 
+                  variant="primary" 
+                  onClick={() => {
+                    localStorage.setItem('editorMode', 'wizard');
+                    navigate('/instructor/courses/new');
+                  }}
+                >
+                  Create with Wizard
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    localStorage.setItem('editorMode', 'traditional');
+                    navigate('/instructor/courses/traditional/new');
+                  }}
+                >
+                  Create Traditionally
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -339,11 +393,17 @@ const InstructorDashboard = () => {
                       <td className="p-4 border-b">
                         ${(course.revenue || 0).toFixed(2)}
                       </td>
+                      {/* MODIFIED: Updated actions with both edit options */}
                       <td className="p-4 border-b">
                         <div className="flex space-x-2">
                           <Link to={`/instructor/courses/${course.slug}/edit`}>
                             <Button variant="outline" size="small">
-                              Edit
+                              Standard Edit
+                            </Button>
+                          </Link>
+                          <Link to={`/instructor/courses/wizard/${course.slug}`}>
+                            <Button variant="primary" size="small">
+                              Wizard Edit
                             </Button>
                           </Link>
                           <Link to={`/instructor/courses/${course.slug}/curriculum`}>

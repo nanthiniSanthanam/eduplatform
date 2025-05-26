@@ -1,10 +1,10 @@
 /**
  * File: frontend/src/App.jsx
- * Version: 2.3.0
- * Date: 2025-05-20 17:14:52
- * Author: cadsanthanam
+ * Version: 2.3.1
+ * Date: 2025-05-25 16:55:13
+ * Author: mohithasanthanam, cadsanthanam
  * 
- * Enhanced Main Application Component with Improved Content Access Control
+ * Enhanced Main Application Component with Improved Content Access Control and Dual Editor Support
  * 
  * Key Improvements:
  * 1. Support for both ID and slug-based course routes
@@ -15,6 +15,7 @@
  * 6. Consistent role checks for admin/instructor routes
  * 7. Smart content access control for tiered educational content
  * 8. Social authentication support (Google, GitHub)
+ * 9. Added dual course creation paths (traditional and wizard modes)
  * 
  * This component:
  * 1. Sets up routing for the entire application
@@ -56,9 +57,9 @@ import CourseLandingPage from './pages/courses/CourseLandingPage';
 import CourseContentPage from './pages/courses/CourseContentPage';
 import AssessmentPage from './pages/courses/AssessmentPage';
 import CoursesListPage from './pages/courses/CoursesListPage';
-import CreateLessonPage from './pages/courses/CreateLessonPage';
+import CreateLessonPage from './pages/instructor/CreateLessonPage';
 import InstructorCourseDetailPage from './pages/courses/InstructorCourseDetailPage';
-import CreateModulePage from './pages/courses/CreateModulePage';
+import CreateModulePage from './pages/instructor/CreateModulePage';
 import CreateCoursePage from './pages/instructor/CreateCoursePage';
 import CourseWizard from './pages/instructor/CourseWizard';
 import EditCoursePage from './pages/instructor/EditCoursePage';
@@ -219,7 +220,7 @@ function App() {
           
           {/* Instructor Course Management - Support for both ID and slug-based routes */}
           
-          {/* Course Creation */}
+          {/* Course Creation - Traditional Method */}
           <Route 
             path="/instructor/create-course" 
             element={
@@ -229,11 +230,22 @@ function App() {
             } 
           />
           
+          {/* ADDED: Traditional course creation with specific path */}
+          <Route 
+            path="/instructor/courses/traditional/new" 
+            element={
+              <ProtectedRoute requiredRoles={['instructor', 'admin']}>
+                <MainLayout><CreateCoursePage /></MainLayout>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Wizard course creation with specific path */}
           <Route 
             path="/instructor/courses/new" 
             element={
               <ProtectedRoute requiredRoles={['instructor', 'admin']}>
-                <MainLayout><CreateCoursePage /></MainLayout>
+                <CourseWizard />
               </ProtectedRoute>
             } 
           />
@@ -243,7 +255,7 @@ function App() {
             path="/instructor/courses/wizard" 
             element={
               <ProtectedRoute requiredRoles={['instructor', 'admin']}>
-                <MainLayout><CourseWizard /></MainLayout>
+                <CourseWizard />
               </ProtectedRoute>
             } 
           />
@@ -252,7 +264,7 @@ function App() {
             path="/instructor/courses/wizard/:courseSlug" 
             element={
               <ProtectedRoute requiredRoles={['instructor', 'admin']}>
-                <MainLayout><CourseWizard /></MainLayout>
+                <CourseWizard />
               </ProtectedRoute>
             } 
           />

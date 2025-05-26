@@ -1,17 +1,18 @@
 /**
  * File: frontend/src/services/instructorService.js
- * Version: 2.7.0 (Critical fixes for EditCoursePage loading issues)
+ * Version: 2.8.0 (Fixed course title uniqueness handling)
  * Date: 2025-05-25
  * Author: mohithasanthanam
- * Last Modified: 2025-05-25 06:45:21 UTC
+ * Last Modified: 2025-05-25 17:45:18 UTC
  * 
- * Enhanced Instructor API Service - Fixed EditCoursePage loading issues
+ * Enhanced Instructor API Service - Fixed course title uniqueness handling
  * 
  * IMPROVEMENTS:
  * 1. FIXED: Data structure consistency to ensure EditCoursePage loads properly
  * 2. FIXED: Response handling in getCourseBySlug and getAllCourses
  * 3. FIXED: Data format consistency between functions
- * 4. FIXED: Other minor optimizations and bug fixes
+ * 4. FIXED: Removed automatic timestamp addition to course titles
+ * 5. ADDED: Method to check for course title uniqueness
  */
 
 // Import apiClient directly from api.js and full api module for auth utilities
@@ -398,24 +399,17 @@ const instructorService = {
     }
   },
   
-  // FIXED: Enhanced course creation with proper FormData handling
+  // FIXED: Enhanced course creation with proper FormData handling and NO timestamp addition
   createCourse: async (courseData, options = {}) => {
     const formData = new FormData();
     
-    // Add timestamp to title to ensure unique slugs
-    const timestamp = new Date().toISOString()
-      .replace(/[-:]/g, '')
-      .replace('T', '_')
-      .replace(/\..+/, '');
-    const uniqueTitle = courseData.title + ` [${timestamp}]`;
-    
-    // Basic required fields
-    formData.append('title', uniqueTitle);
+    // FIXED: Use original title without timestamp
+    formData.append('title', courseData.title);
     
     // Ensure description is never blank
     const description = courseData.description && courseData.description.trim() !== '' 
       ? courseData.description 
-      : `Course description for ${uniqueTitle}`;
+      : `Course description for ${courseData.title}`;
     formData.append('description', description);
     
     formData.append('category_id', courseData.category_id || '1');
@@ -457,6 +451,37 @@ const instructorService = {
         ...options
       }
     );
+  },
+  
+  // ADDED: Check if a course title already exists
+  checkCourseTitleExists: async (title, options = {}) => {
+    try {
+      // Get all instructor courses
+      const courses = await instructorService.getAllCourses({
+        enableCache: false, // Don't cache this request to ensure fresh data
+        ...options
+      });
+      
+      // Extract the courses array
+      const coursesList = courses.results || courses;
+      
+      // If coursesList is not an array or empty, return false (no duplicates)
+      if (!Array.isArray(coursesList) || coursesList.length === 0) {
+        return false;
+      }
+      
+      // Check if any course has the same title (case insensitive)
+      const normalizedTitle = title.trim().toLowerCase();
+      const existingCourse = coursesList.find(course => 
+        course.title && course.title.toLowerCase() === normalizedTitle
+      );
+      
+      return existingCourse ? true : false;
+    } catch (error) {
+      console.error('Error checking course title uniqueness:', error);
+      // In case of error, return false to allow creation
+      return false;
+    }
   },
   
   // FIXED: Enhanced course updating with proper FormData handling

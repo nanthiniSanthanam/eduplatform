@@ -1,6 +1,6 @@
 // fmt: off
 // isort: skip_file
-// Timestamp: 2024-06-15 - Fixed drag handle issues in Module Structure Step
+// Timestamp: 2025-05-25 14:03:07 - Fixed drag handle issues in Module Structure Step
 
 import React, { useState } from 'react';
 import { useCourseWizard } from '../CourseWizardContext';
@@ -117,6 +117,7 @@ const ModuleStructureStep = () => {
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
+                              {...provided.dragHandleProps}
                               className="border rounded-lg overflow-hidden bg-white shadow-sm"
                             >
                               {isEditing === module.id ? (
@@ -171,10 +172,9 @@ const ModuleStructureStep = () => {
                               ) : (
                                 // View mode
                                 <div>
-                                  {/* Header with drag handle */}
+                                  {/* Header with drag handle - removed dragHandleProps from here */}
                                   <div 
                                     className="bg-gray-50 p-4 flex items-center justify-between"
-                                    {...provided.dragHandleProps} 
                                   >
                                     <div className="flex items-center">
                                       <div className="flex-shrink-0 mr-3 text-gray-400">
